@@ -14,7 +14,15 @@ One row, at the top or bottom of the card (`toolbar_position`).
 | Presets | A menu. At its top, the quick ranges 1h 6h 12h 24h 7d 30d 1y: rolling windows ending now (set them with `quick_ranges`). Below them the menu entries, by default Today, Yesterday, Tomorrow, This week, Last week, This month, Last month, This year and Last year (set them with `presets`; lengths show as "Past 6 days"). Custom… at the end opens From and To date-and-time fields. The button shows the window picked, such as "Past 24 hours" or "Today". |
 | Download | CSV of what is shown, or a PNG image. |
 
-On a narrow card the toolbar stays on one row: first the range label goes onto two lines, then it is cut short. With the range label turned off, its space stays empty. The menu stays inside the card: the quick ranges stay at its top and the entries scroll.
+![The Presets menu open: quick ranges at the top, then Today, Yesterday and the other entries, and Custom at the end](images/presets-menu.png)
+
+With `toolbar_position: bottom` the toolbar sits under the chart and the menu opens upwards. Here with the dates and names turned off, in a dark theme:
+
+![A dark card with one filled temperature line, the value above it without a name, and the toolbar at the bottom](images/toolbar-bottom.png)
+
+On a narrow card the toolbar stays on one row: first the range label goes onto two lines, then the menu button names the window briefly (24h instead of Past 24 hours), then the label is cut short. With the range label turned off, its space stays empty. The menu stays inside the card: the quick ranges stay at its top and the entries scroll.
+
+![The card at phone width: the dates on two lines and the menu button reading 24h](images/phone.png)
 
 Weeks start on the day set in your Home Assistant profile (**First day of the week**). With "Auto", the card follows the browser's language settings.
 
@@ -24,7 +32,10 @@ Each entity shows its value in its line's colour, with its name underneath (or a
 
 - Tap a value to open the entity's details (more-info).
 - Tap a name to fade the line, bars or strip (drawn at `faded_opacity`, 10 % by default) and strike the name through. Tap again to bring it back. Faded entities are left out of the CSV, and out of a pie.
-- While you hover over or tap the chart, the values change to the readings at that moment, and a vertical line shows the time on the axis. With the floating tooltip on, the tooltip shows those readings and the values row keeps the current ones.
+- While you hover over or tap the chart, the values change to the readings at that moment, and a vertical line shows the time on the axis. With the floating tooltip on (`tooltip: true`), the tooltip shows those readings and the values row keeps the current ones:
+
+  ![A dark card with three temperature lines, a box beside the cursor listing each value at that moment, and the current values under the chart](images/tooltip.png)
+
 - In a bar chart a meter shows the total of the bars on screen; while you hover, the bar under the cursor. In a pie, each value shows its share. Over a heatmap, the value is that of the hour under the cursor.
 - `show_names: false` (or `show_name: false` on one entity) shows the values without names; hovering a value then shows whose it is. Without its name, an entity cannot be faded by tapping.
 

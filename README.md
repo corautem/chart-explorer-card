@@ -77,6 +77,8 @@ The editor saves only what differs from the defaults, so the YAML stays short. E
 - **Moving and zooming:** drag sideways to move through time; pinch, or hold Ctrl and use the mouse wheel, to zoom; hold Shift and drag to zoom into a part; double-click or double-tap to go back.
 - **Values:** hover over or tap the chart to see the readings at that moment; tap a value for the entity's details; tap a name to fade the entity and leave it out of the CSV.
 
+![The Presets menu open: quick ranges at the top, then Today, Yesterday and the other entries, and Custom at the end](docs/images/presets-menu.png)
+
 More on each control: [Using the card](docs/usage.md).
 
 ## Examples
@@ -99,6 +101,8 @@ entities:
       standby: "#9e9e9e"
 ```
 
+![A temperature line with the heating periods shaded behind it and the heat pump status as a strip underneath](docs/images/card.png)
+
 </details>
 
 <details>
@@ -116,6 +120,8 @@ entities:
     name: Hot water
 ```
 
+![Energy per day for two meters, side by side](docs/images/bar.png)
+
 </details>
 
 <details>
@@ -131,10 +137,12 @@ entities:
     name: Status
 ```
 
+![A week of heat pump status, each hour in the colour of its main state](docs/images/heatmap-states.png)
+
 </details>
 
 <details>
-<summary><b>A clean card: values only, toolbar at the bottom without dates</b></summary>
+<summary><b>A clean card: the value only, toolbar at the bottom without dates</b></summary>
 
 ```yaml
 type: custom:chart-explorer-card
@@ -142,8 +150,29 @@ toolbar_position: bottom
 show_range_label: false
 show_names: false
 entities:
-  - sensor.living_room_temperature
+  - entity: sensor.outdoor_temperature
+    fill: true
 ```
+
+![A dark card with one filled temperature line, the value above it without a name, and the toolbar at the bottom](docs/images/toolbar-bottom.png)
+
+</details>
+
+<details>
+<summary><b>A floating tooltip, with the values under the chart</b></summary>
+
+```yaml
+type: custom:chart-explorer-card
+title: Temperatures
+tooltip: true
+values_placement: below
+entities:
+  - sensor.flow_temperature
+  - sensor.return_temperature
+  - sensor.outdoor_temperature
+```
+
+![A dark card with three temperature lines, a box beside the cursor listing each value at that moment, and the current values under the chart](docs/images/tooltip.png)
 
 </details>
 

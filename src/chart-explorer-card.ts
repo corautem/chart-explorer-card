@@ -151,7 +151,7 @@ export class ChartExplorerCard extends LitElement {
   private _customFrom = '';
   private _customTo = '';
   private _customError?: string;
-  /** 0 full toolbar, 1 two-line label, 2 label may be cut short. */
+  /** 0 full toolbar, 1 two-line label, 2 short name on the menu button, 3 label may be cut short. */
   private _toolbarLevel = 0;
   private readonly _levelWidths: number[] = [];
 
@@ -1532,14 +1532,15 @@ export class ChartExplorerCard extends LitElement {
 
   /**
    * Keeps the toolbar on one row. When it does not fit, the label first goes
-   * onto two lines, then it may be cut short. Each step remembers the width it
-   * needed, to step back.
+   * onto two lines, then the menu button names the window briefly ("24h"
+   * instead of "Past 24 hours"), then the label may be cut short. Each step
+   * remembers the width it needed, to step back.
    */
   private _checkToolbar(): void {
     const bar = this.renderRoot.querySelector<HTMLElement>('.toolbar');
     if (!bar || !bar.clientWidth) return;
     const available = bar.clientWidth;
-    if (bar.scrollWidth > available + 1 && this._toolbarLevel < 2) {
+    if (bar.scrollWidth > available + 1 && this._toolbarLevel < 3) {
       this._levelWidths[this._toolbarLevel] = bar.scrollWidth;
       this._toolbarLevel++;
       this.requestUpdate();
@@ -1806,8 +1807,9 @@ export class ChartExplorerCard extends LitElement {
       this._isActive(item),
     );
     const activePreset = spec ? presetOf(spec) : undefined;
-    const menuText = activeMenuItem ? menuLabel(activeMenuItem) : activePreset ? presetName(activePreset) : t('presets');
-    const classes = `toolbar${level >= 1 ? ' stacked' : ''}${level >= 2 ? ' shrink' : ''}`;
+    const itemName = level >= 2 ? buttonLabel : menuLabel;
+    const menuText = activeMenuItem ? itemName(activeMenuItem) : activePreset ? presetName(activePreset) : t('presets');
+    const classes = `toolbar${level >= 1 ? ' stacked' : ''}${level >= 3 ? ' shrink' : ''}`;
     return html`
       <div class="toolbar-wrap">
         <div class=${classes}>

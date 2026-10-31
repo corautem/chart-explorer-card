@@ -63,6 +63,9 @@ try {
     await page.waitForTimeout(1500);
     await page.screenshot({ path: `${OUT}/phone-light.png`, fullPage: true });
     check('narrow card: no quick ranges in the toolbar', (await page.locator(`${card(1)} .toolbar .quick`).count()) === 0);
+    const short = (await page.locator(`${card(1)} .with-icon`).innerText()).trim();
+    check('narrow card: the menu button names the window briefly', short === '24h', short);
+    check('narrow card: the dates are not cut short', (await page.locator(`${card(1)} .toolbar.shrink`).count()) === 0);
     await page.locator(`${card(1)} .with-icon`).click();
     const quickInMenu = await page.locator(`${card(1)} .menu .chips button`, { hasText: '24h' }).count();
     check('narrow card: menu lists the quick ranges', quickInMenu === 1);

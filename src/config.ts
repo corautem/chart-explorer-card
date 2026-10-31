@@ -5,7 +5,8 @@ export type Curve = 'smooth' | 'straight' | 'step';
 export type DataSource = 'auto' | 'history' | 'statistics';
 export type GridStyle = 'dashed' | 'solid' | 'none';
 export type StatisticKind = 'mean' | 'min' | 'max' | 'state';
-export type LineStyle = 'solid' | 'dashed' | 'dotted';
+/** `none` hides the line, leaving its fill or shaded range. */
+export type LineStyle = 'solid' | 'dashed' | 'dotted' | 'none';
 /** Where each value sits relative to its entity name. */
 export type ValuePosition = 'above' | 'below' | 'left' | 'right';
 /** How the values row spreads across the card. */
@@ -24,14 +25,30 @@ export interface Space {
   ms?: number;
 }
 
+/**
+ * A list kept in an attribute, such as a forecast: each item has a time and a
+ * value, and optionally a low and a high value for a shaded range.
+ */
+export interface AttributeSourceInput {
+  name: string;
+  time?: string;
+  value?: string;
+  low?: string;
+  high?: string;
+}
+
 export interface EntityConfigInput {
   entity: string;
+  /** Draw a list from this attribute instead of the recorded history. */
+  attribute?: string | AttributeSourceInput;
   name?: string;
   color?: string;
   unit?: string;
   curve?: Curve;
   line_style?: LineStyle;
   fill?: boolean;
+  /** 0 to 1: an even fill at this opacity instead of the fading gradient. */
+  fill_opacity?: number;
   width?: number;
   y_axis?: string;
   decimals?: number;
@@ -120,17 +137,28 @@ export interface CardConfigInput {
   y_axes?: YAxisInput[];
 }
 
+export interface AttributeSource {
+  name: string;
+  /** Keys in each item; without them the time and value keys are found automatically. */
+  time?: string;
+  value?: string;
+  low?: string;
+  high?: string;
+}
+
 export interface EntityConfig {
   /** Unique per row, so one entity can appear twice. */
   key: string;
   index: number;
   entity: string;
+  attribute?: AttributeSource;
   name?: string;
   color?: string;
   unit?: string;
   curve: Curve;
   lineStyle?: LineStyle;
   fill: boolean;
+  fillOpacity?: number;
   width: number;
   yAxis?: string;
   decimals?: number;
@@ -206,7 +234,7 @@ export const DEFAULT_QUICK_RANGES = ['1h', '6h', '12h', '24h', '7d', '30d', '1y'
 
 const CURVES: Curve[] = ['smooth', 'straight', 'step'];
 const GRID_STYLES: GridStyle[] = ['dashed', 'solid', 'none'];
-const LINE_STYLES: LineStyle[] = ['solid', 'dashed', 'dotted'];
+const LINE_STYLES: LineStyle[] = ['solid', 'dashed', 'dotted', 'none'];
 const STATISTICS: StatisticKind[] = ['mean', 'min', 'max', 'state'];
 const CHART_TYPES: ChartType[] = ['line', 'area', 'bar', 'pie', 'donut', 'heatmap'];
 const ENTITY_TYPES: EntityType[] = ['auto', 'line', 'bar', 'timeline', 'band'];
@@ -326,12 +354,14 @@ function normalizeEntity(raw: string | EntityConfigInput, index: number): Entity
     key: `${index}:${e.entity}`,
     index,
     entity: e.entity,
+    attribute: attributeSource(e.attribute, `${where} attribute`),
     name: e.name === undefined ? undefined : String(e.name),
     color: e.color === undefined ? undefined : String(e.color),
     unit: e.unit === undefined ? undefined : String(e.unit),
     curve: oneOf(e.curve, `${where} curve`, CURVES, 'smooth'),
     lineStyle: e.line_style === undefined ? undefined : oneOf(e.line_style, `${where} line_style`, LINE_STYLES, 'solid'),
     fill: bool(e.fill, `${where} fill`, false),
+    fillOpacity: fillOpacity(e.fill_opacity, `${where} fill_opacity`),
     width: positiveNumber(e.width, `${where} width`, 2),
     yAxis: e.y_axis === undefined ? undefined : String(e.y_axis),
     decimals: decimals === undefined ? undefined : clamp(Math.round(decimals), 0, 10),
@@ -344,6 +374,24 @@ function normalizeEntity(raw: string | EntityConfigInput, index: number): Entity
     stateColors: stateColors(e.state_colors, `${where} state_colors`),
     onStates: e.on_states === undefined ? undefined : stringList(e.on_states, `${where} on_states`),
   };
+}
+
+function fillOpacity(value: unknown, name: string): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 0 || amount > 1) throw new Error(`${name} must be between 0 and 1, such as 0.3.`);
+  return amount;
+}
+
+function attributeSource(value: unknown, name: string): AttributeSource | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  if (typeof value === 'string') return { name: value };
+  if (typeof value !== 'object' || Array.isArray(value) || !(value as AttributeSourceInput).name) {
+    throw new Error(`${name} must be an attribute name, or { name, time, value, low, high } with the keys in each item.`);
+  }
+  const input = value as AttributeSourceInput;
+  const key = (text: unknown) => (text === undefined || text === null || text === '' ? undefined : String(text));
+  return { name: String(input.name), time: key(input.time), value: key(input.value), low: key(input.low), high: key(input.high) };
 }
 
 function stateColors(value: unknown, name: string): Record<string, string> {

@@ -244,6 +244,7 @@ const ENTITY_DEFAULTS = { curve: 'smooth', width: 2, fill: false, show_in_header
 // state_colors is not listed: the state colour form edits it, and the main form keeps it as it is.
 const ENTITY_KEYS = [
   'entity',
+  'attribute',
   'type',
   'on_states',
   'name',
@@ -252,6 +253,7 @@ const ENTITY_KEYS = [
   'curve',
   'line_style',
   'fill',
+  'fill_opacity',
   'width',
   'y_axis',
   'decimals',
@@ -269,9 +271,17 @@ export function entityId(item: EntityItem): string {
 /** Form data for one entity, with its current (or default) colour as RGB. */
 export function entityToForm(item: EntityItem, defaultColor: string): FormData {
   const e: EntityConfigInput = typeof item === 'string' ? { entity: item } : item;
+  const source = typeof e.attribute === 'string' ? { name: e.attribute } : e.attribute;
   return {
     ...ENTITY_DEFAULTS,
     ...e,
+    attribute: undefined,
+    attribute_name: source?.name ?? '',
+    attribute_time: source?.time ?? 'auto',
+    attribute_value: source?.value ?? 'auto',
+    attribute_low: source?.low ?? 'none',
+    attribute_high: source?.high ?? 'none',
+    fill_opacity: e.fill_opacity === undefined ? undefined : Math.round(e.fill_opacity * 100),
     color: toRgb(e.color ?? defaultColor) ?? toRgb(defaultColor),
     line_style: e.line_style ?? 'auto',
     y_axis: e.y_axis ?? 'auto',
@@ -285,7 +295,15 @@ export function entityToForm(item: EntityItem, defaultColor: string): FormData {
 export function entityFromForm(form: FormData, original: EntityItem, defaultColor: string): EntityItem {
   const base: Record<string, unknown> = typeof original === 'string' ? {} : { ...original };
   const out: Record<string, unknown> = { entity: String(form.entity ?? entityId(original)) };
-  if (form.type && form.type !== 'auto') out.type = form.type;
+  if (typeof form.attribute_name === 'string' && form.attribute_name) {
+    const keys: Record<string, string> = {};
+    if (form.attribute_time && form.attribute_time !== 'auto') keys.time = String(form.attribute_time);
+    if (form.attribute_value && form.attribute_value !== 'auto') keys.value = String(form.attribute_value);
+    if (form.attribute_low && form.attribute_low !== 'none') keys.low = String(form.attribute_low);
+    if (form.attribute_high && form.attribute_high !== 'none') keys.high = String(form.attribute_high);
+    out.attribute = Object.keys(keys).length ? { name: form.attribute_name, ...keys } : form.attribute_name;
+  }
+  if (form.type && form.type !== 'auto' && !out.attribute) out.type = form.type;
   if (typeof form.name === 'string' && form.name.trim()) out.name = form.name;
   if (Array.isArray(form.color)) {
     const hex = toHex(form.color as number[]);
@@ -296,6 +314,9 @@ export function entityFromForm(form: FormData, original: EntityItem, defaultColo
   if (form.curve && form.curve !== ENTITY_DEFAULTS.curve) out.curve = form.curve;
   if (form.line_style && form.line_style !== 'auto') out.line_style = form.line_style;
   if (form.fill === true) out.fill = true;
+  if (form.fill === true && typeof form.fill_opacity === 'number' && Number.isFinite(form.fill_opacity)) {
+    out.fill_opacity = Math.min(100, Math.max(0, form.fill_opacity)) / 100;
+  }
   if (typeof form.width === 'number' && form.width !== ENTITY_DEFAULTS.width) out.width = form.width;
   if (form.y_axis && form.y_axis !== 'auto') out.y_axis = form.y_axis;
   if (typeof form.decimals === 'number' && Number.isFinite(form.decimals)) out.decimals = form.decimals;
@@ -373,6 +394,12 @@ export const LABELS: Record<string, string> = {
   curve: 'Line shape',
   line_style: 'Line type',
   fill: 'Fill under the line',
+  fill_opacity: 'Fill opacity',
+  attribute_name: 'Draw from',
+  attribute_time: 'Time in each item',
+  attribute_value: 'Value in each item',
+  attribute_low: 'Low value (shaded range)',
+  attribute_high: 'High value (shaded range)',
   unit: 'Unit',
   decimals: 'Decimal places',
   y_axis: 'Scale (y-axis)',
@@ -428,10 +455,14 @@ export const HELPERS: Record<string, string> = {
   csv_separator: 'Comma suits most programs; Excel set up for European formats expects a semicolon.',
   csv_decimal: 'Use a comma with the semicolon separator for European Excel.',
   csv_fill: 'Blank keeps only the recorded points. Repeat fills each empty cell with that entity\'s last value, which suits Excel charts and formulas.',
-  unit: 'Leave empty to use the entity unit.',
+  unit: 'Leave empty to use the entity unit. A list from an attribute has no unit unless you set one, such as kW.',
   show_unit: 'The unit, such as °C, after the value above the chart and in the tooltip.',
-  decimals: 'Leave empty to use the entity display precision.',
-  line_style: 'Automatic is a solid line; from the ninth entity on, lines are dashed so colours can repeat.',
+  decimals: 'Leave empty to use the entity display precision; a list from an attribute then shows up to two decimal places.',
+  line_style: 'Automatic is a solid line; from the ninth entity on, lines are dashed so colours can repeat. None leaves only the fill or the shaded range.',
+  fill_opacity: 'Leave empty for a fill that fades downwards; a percentage gives an even fill at that opacity.',
+  attribute_name: 'The recorded history, or a list kept in one of the entity\'s attributes, such as a solar forecast or electricity prices. A list is drawn as it is now, including times still to come.',
+  attribute_value: 'Automatic picks the only number in each item. Lists with several numbers, such as forecast estimates, need one chosen here.',
+  attribute_low: 'With a low and a high value, a shaded range is drawn behind the line, such as pv_estimate10 to pv_estimate90.',
   y_axis: 'Entities with different units cannot share one scale: 1,500 W would squash a 20 °C line flat. Automatic puts the first unit on the left-hand scale and the second on the right-hand scale. Choose Left or Right to put this entity on that scale yourself.',
   statistic: 'For every entity: windows longer than 24 hours keep one point per 5 minutes, hour or day, with its average, lowest and highest value. Highest keeps short peaks visible; lowest shows the dips. Energy and water meters always show their reading. An entity can choose differently in its own Advanced section.',
 };
@@ -634,12 +665,45 @@ const KIND_NAMES: Record<string, string> = { line: 'line', bar: 'bars', timeline
  * `autoKind` is what Automatic means for this entity; `states` are its known
  * states, offered for bands.
  */
-export function entitySchema(kind = 'line', autoKind = 'line', states: string[] = []): unknown[] {
+/** The entity's attributes that hold lists, and the keys of the chosen list's items. */
+export interface ListSource {
+  attributes: string[];
+  keys: string[];
+  chosen: string;
+}
+
+export function entitySchema(
+  kind = 'line',
+  autoKind = 'line',
+  states: string[] = [],
+  list: ListSource = { attributes: [], keys: [], chosen: '' },
+): unknown[] {
   const numeric = kind === 'line' || kind === 'bar';
+  const names = list.chosen && !list.attributes.includes(list.chosen) ? [...list.attributes, list.chosen] : list.attributes;
+  const keyOptions = (first: [string, string]) => select([first, ...list.keys.map((key): [string, string] => [key, key])]);
   const schema: unknown[] = [
     { name: 'entity', required: true, selector: { entity: {} } },
     grid({ name: 'name', selector: { text: {} } }, { name: 'color', selector: { color_rgb: {} } }),
-    {
+  ];
+  if (names.length) {
+    schema.push({
+      name: 'attribute_name',
+      selector: select([['', 'Recorded history'], ...names.map((name): [string, string] => [name, `Attribute: ${name}`])]),
+    });
+  }
+  if (list.chosen) {
+    schema.push(
+      grid(
+        { name: 'attribute_time', selector: keyOptions(['auto', 'Automatic']) },
+        { name: 'attribute_value', selector: keyOptions(['auto', 'Automatic']) },
+      ),
+      grid(
+        { name: 'attribute_low', selector: keyOptions(['none', 'None']) },
+        { name: 'attribute_high', selector: keyOptions(['none', 'None']) },
+      ),
+    );
+  } else {
+    schema.push({
       name: 'type',
       selector: select([
         ['auto', `Automatic (${KIND_NAMES[autoKind] ?? autoKind})`],
@@ -648,19 +712,20 @@ export function entitySchema(kind = 'line', autoKind = 'line', states: string[] 
         ['timeline', 'Timeline strip'],
         ['band', 'Band behind the lines'],
       ]),
-    },
-  ];
+    });
+  }
   if (kind === 'line') {
     schema.push(
       grid(
         { name: 'curve', selector: select([['smooth', 'Smooth'], ['straight', 'Straight'], ['step', 'Steps']]) },
         {
           name: 'line_style',
-          selector: select([['auto', 'Automatic'], ['solid', 'Solid'], ['dashed', 'Dashed'], ['dotted', 'Dotted']]),
+          selector: select([['auto', 'Automatic'], ['solid', 'Solid'], ['dashed', 'Dashed'], ['dotted', 'Dotted'], ['none', 'None']]),
         },
       ),
       { name: 'width', selector: number(0.5, 8, 0.5, 'px', 'slider') },
       { name: 'fill', selector: { boolean: {} } },
+      { name: 'fill_opacity', selector: number(0, 100, 5, '%') },
     );
   }
   if (kind === 'band') {
@@ -678,7 +743,10 @@ export function entitySchema(kind = 'line', autoKind = 'line', states: string[] 
         name: 'y_axis',
         selector: select([['auto', 'Automatic (by unit)'], ['left', 'Left scale'], ['right', 'Right scale']]),
       },
-      {
+    );
+    // A list from an attribute is drawn as it is, so the choice for long windows does not apply.
+    if (!list.chosen) {
+      schema.push({
         name: 'statistic',
         selector: select([
           ['auto', 'Same as the card (Advanced tab)'],
@@ -687,8 +755,8 @@ export function entitySchema(kind = 'line', autoKind = 'line', states: string[] 
           ['max', 'Highest in each period'],
           ['state', 'Meter reading'],
         ]),
-      },
-    );
+      });
+    }
   }
   return schema;
 }

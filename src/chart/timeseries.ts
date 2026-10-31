@@ -14,6 +14,8 @@ export interface PlotSeries {
   curve: Curve;
   lineStyle: LineStyle;
   fill: boolean;
+  /** An even fill at this opacity; without it the fill fades from the line downwards. */
+  fillOpacity?: number;
   width: number;
   faded: boolean;
   axisIndex: number;
@@ -21,6 +23,8 @@ export interface PlotSeries {
   data: { t: number[]; v: number[] };
   /** Lines with the same stack id pile up as areas; their points share timestamps. */
   stack?: string;
+  /** A shaded range behind the line, low to high, at the same timestamps as `data`. */
+  band?: { low: number[]; high: number[] };
 }
 
 /** One entity's bars, already placed: each bar spans start to end in time and low to high in value. */
@@ -208,6 +212,7 @@ export function buildOption(input: PlotInput): Record<string, unknown> {
       if (nowShown) series.push(nowLine(input.now, 0, full, theme));
     }
     for (const bar of input.bars) series.push(barSeries(bar, input));
+    for (const line of input.series) if (line.band) series.push(rangeSeries(line, input));
     for (const line of input.series) series.push(lineSeries(line, input));
   }
 
@@ -479,12 +484,66 @@ function readableOn(color: string, theme: Theme): string {
 }
 
 interface CustomParams {
+  dataIndex: number;
   coordSys: { x: number; y: number; width: number; height: number };
 }
 
 interface CustomApi {
   value(dimension: number): number;
   coord(point: [number, number]): number[];
+}
+
+/**
+ * The shaded range behind a line, drawn as one polygon per unbroken run so
+ * neighbouring slots show no seams. Its data carries the low and high values,
+ * so the scale makes room for them.
+ */
+function rangeSeries(s: PlotSeries, input: PlotInput): Record<string, unknown> {
+  const band = s.band as NonNullable<PlotSeries['band']>;
+  const { t } = s.data;
+  const fill = withAlpha(s.color, s.faded ? 0.18 * input.fadedOpacity : 0.18);
+  const step = s.curve === 'step';
+  const runs: number[][] = [];
+  let run: number[] = [];
+  for (let i = 0; i < t.length; i++) {
+    if (Number.isFinite(band.low[i]) && Number.isFinite(band.high[i])) run.push(i);
+    else if (run.length) {
+      runs.push(run);
+      run = [];
+    }
+  }
+  if (run.length) runs.push(run);
+  return {
+    type: 'custom',
+    id: `${s.key}:range`,
+    yAxisIndex: s.axisIndex,
+    data: t.map((time, i) => [time, band.low[i], band.high[i]]),
+    encode: { x: 0, y: [1, 2] },
+    clip: true,
+    silent: true,
+    z: s.faded ? 0 : 1,
+    animation: false,
+    renderItem: (params: CustomParams, api: CustomApi) => {
+      if (params.dataIndex !== 0) return null;
+      const edge = (indices: number[], values: number[]) => {
+        const points: number[][] = [];
+        indices.forEach((i, k) => {
+          points.push(api.coord([t[i], values[i]]));
+          // A step holds each value until the next point, as the line does.
+          if (step && k < indices.length - 1) points.push(api.coord([t[indices[k + 1]], values[i]]));
+        });
+        return points;
+      };
+      return {
+        type: 'group',
+        children: runs.map((indices) => ({
+          type: 'polygon',
+          shape: { points: [...edge(indices, band.high), ...edge(indices, band.low).reverse()] },
+          style: { fill },
+        })),
+      };
+    },
+  };
 }
 
 function lineSeries(s: PlotSeries, input: PlotInput): Record<string, unknown> {
@@ -513,8 +572,8 @@ function lineSeries(s: PlotSeries, input: PlotInput): Record<string, unknown> {
     animation: input.animation,
     lineStyle: {
       color: s.color,
-      width: s.width,
-      opacity,
+      width: s.lineStyle === 'none' ? 0 : s.width,
+      opacity: s.lineStyle === 'none' ? 0 : opacity,
       type: s.lineStyle === 'dashed' ? [6, 4] : s.lineStyle === 'dotted' ? [1, 4] : 'solid',
       cap: 'round',
       join: 'round',
@@ -522,6 +581,8 @@ function lineSeries(s: PlotSeries, input: PlotInput): Record<string, unknown> {
     itemStyle: { color: s.color, opacity },
     areaStyle: s.stack
       ? { opacity: opacity * 0.45, color: s.color }
+      : s.fill && s.fillOpacity !== undefined
+      ? { opacity, color: withAlpha(s.color, s.fillOpacity) }
       : s.fill
       ? {
           opacity,
@@ -572,10 +633,12 @@ function brightExtents(input: PlotInput): ({ min: number; max: number } | undefi
       if (s.axisIndex !== axisIndex || s.faded) continue;
       for (let i = 0; i < s.data.t.length; i++) {
         const t = s.data.t[i];
-        const value = s.data.v[i];
-        if (t < start || t > end || Number.isNaN(value)) continue;
-        if (value < low) low = value;
-        if (value > high) high = value;
+        if (t < start || t > end) continue;
+        for (const value of [s.data.v[i], s.band?.low[i] ?? NaN, s.band?.high[i] ?? NaN]) {
+          if (Number.isNaN(value)) continue;
+          if (value < low) low = value;
+          if (value > high) high = value;
+        }
       }
     }
     if (!Number.isFinite(low)) return undefined;

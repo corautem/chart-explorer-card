@@ -677,6 +677,75 @@ try {
     check('US English page loads without errors', errors.length === 0, errors.join(' | '));
     await context.close();
   }
+  {
+    // A forecast read from an attribute: a line into the future, a shaded range, no history request.
+    const { page, context, errors } = await open('?only=11&live=0&delay=50');
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: `${OUT}/solar-forecast.png` });
+    const info = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      const series = el._chart.getOption().series;
+      const forecast = series.find((s) => s.name === 'Forecast');
+      const last = forecast.data[forecast.data.length - 1];
+      return {
+        range: series.some((s) => s.type === 'custom' && String(s.id).endsWith(':range')),
+        points: forecast.data.length,
+        future: last[0] > Date.now(),
+        historyFor: window.__wsLog
+          .filter((m) => m.type === 'history/history_during_period' || m.type === 'recorder/statistics_during_period')
+          .flatMap((m) => m.entity_ids ?? m.statistic_ids ?? []),
+      };
+    }, card());
+    check('a list from an attribute draws as a line', info.points >= 40, String(info.points));
+    check('the list runs past the present', info.future);
+    check('a low and a high value draw a shaded range', info.range);
+    check('the forecast needs no history request', !info.historyFor.includes('sensor.demo_pv_forecast'), info.historyFor.join(' '));
+    const unit = await page.locator(`${card()} .item .value`).nth(1).innerText();
+    check('the forecast value shows the unit set on the row', /kW$/.test(unit.trim()) && !/kWh/.test(unit), unit);
+    await page.locator(`${card()} .with-icon`).click();
+    await page.locator(`${card()} .menu .menu-list button`, { hasText: 'Tomorrow' }).click();
+    await page.waitForTimeout(800);
+    const box = await page.locator(`${card()} .chart`).boundingBox();
+    await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.6);
+    await page.waitForTimeout(300);
+    const values = (await page.locator(`${card()} .item .value`).allInnerTexts()).map((v) => v.trim());
+    check('hovering tomorrow shows the forecast, and no measurement', values[0].startsWith('-') && Number.parseFloat(values[1]) > 0, values.join(' | '));
+    await page.mouse.move(box.x + box.width * 0.5, box.y - 120);
+    const lines = await download(page, 1, 'CSV');
+    check('CSV lists the forecast with its low and high values', /Forecast \(kW\),Forecast low \(kW\),Forecast high \(kW\)/.test(lines[0]), lines[0]);
+    check('forecast page loads without errors', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    // Your style: the forecast as see-through areas, without lines.
+    const { page, context, errors } = await open('?only=12&live=0&delay=50');
+    await page.waitForTimeout(1500);
+    const looks = await page.evaluate((sel) => {
+      const series = document.querySelector(sel)._chart.getOption().series.filter((s) => String(s.name).startsWith('Forecast'));
+      return series.map((s) => ({ width: s.lineStyle.width, fill: typeof s.areaStyle?.color === 'string' ? s.areaStyle.color : 'gradient' }));
+    }, card());
+    check('line type none hides the line and keeps the fill', looks.length === 2 && looks.every((l) => l.width === 0), JSON.stringify(looks));
+    check('a fill opacity gives an even fill', looks.every((l) => /rgba\(.*0\.35\)/.test(l.fill)), JSON.stringify(looks));
+    check('forecast areas page loads without errors', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    // The editor: draw from an attribute, with key pickers filled from the list's items.
+    const { page, context, errors } = await open('?editor=1&only=11&live=0&delay=50', { width: 1400, height: 1400 });
+    await page.waitForTimeout(1200);
+    const ed = 'chart-explorer-card-editor';
+    await page.locator(`${ed} .row .row-text`).nth(1).click();
+    await page.waitForTimeout(400);
+    const fields = await page.evaluate((sel) => {
+      const root = document.querySelector(sel).shadowRoot;
+      const has = (name) => Boolean(root.querySelector(`[data-field="${name}"]`));
+      return { source: has('attribute_name'), value: has('attribute_value'), low: has('attribute_low'), type: has('type'), statistic: has('statistic'), opacity: has('fill_opacity') };
+    }, ed);
+    check('the editor offers drawing from an attribute, with its keys', fields.source && fields.value && fields.low, JSON.stringify(fields));
+    check('settings that do not apply to a list are hidden', !fields.type && !fields.statistic, JSON.stringify(fields));
+    check('editor forecast page loads without errors', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
   for (const width of [470, 900]) {
     // The quick ranges live in the Presets menu at any width, with the dates on or off.
     const { page, context, errors } = await open(`?only=1&live=0&delay=50&width=${width}`);

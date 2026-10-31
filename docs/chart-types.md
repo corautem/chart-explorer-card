@@ -106,6 +106,68 @@ entities:
 
 Hovering a cell shows that hour's value. For an entity with states it shows the state that held longest in that hour, followed by the minutes in each state, such as `Heating 40 min · Standby 20 min`. A state that lasts a few minutes, such as a short defrost, colours an hour only when nothing else lasted longer in it.
 
+## Forecasts and other lists from attributes
+
+![Measured solar power with the forecast as a dashed line and a shaded range from the low to the high estimate](images/forecast.png)
+
+Some integrations keep a list in an attribute instead of in the recorded history. Solcast and Predbat keep the solar forecast in `detailedForecast`: half-hour slots with `period_start`, the estimate `pv_estimate` in kW, and a low and a high estimate, `pv_estimate10` and `pv_estimate90`. `attribute` draws such a list as it is now, including the times still to come. The row does not use the entity's recorded history.
+
+```yaml
+type: custom:chart-explorer-card
+title: Solar forecast
+default_range: today
+entities:
+  - entity: sensor.solar_power
+    name: Solar power
+  - entity: sensor.pv_forecast_today
+    name: Forecast
+    unit: kW
+    line_style: dashed
+    attribute:
+      name: detailedForecast
+      time: period_start
+      value: pv_estimate
+      low: pv_estimate10
+      high: pv_estimate90
+```
+
+| Key | What it is |
+|---|---|
+| `name` | The attribute that holds the list. `attribute: detailedForecast` on its own is short for this. |
+| `time` | The key with each item's time, as ISO text or epoch seconds or milliseconds. Found automatically when it is `period_start`, `start`, `start_time`, `datetime`, `time`, `from` or `date`. |
+| `value` | The key with the value. Found automatically only when each item holds one number; a forecast holds several, so name the one to draw. |
+| `low`, `high` | Optional. With both, a shaded range is drawn behind the line, from the low to the high value. |
+
+Items can also be `[time, value]` pairs, and the attribute can be a map of times to values.
+
+- **Unit:** a list has no unit of its own (the entity's unit belongs to its state, such as kWh for the day's total), so set `unit`. Rows in the same unit share a scale; a power sensor in W and a forecast in kW get separate scales.
+- **Values row:** shows the list's value now, and at the cursor, before or after the present.
+- **Updates:** the chart redraws when the attribute changes. No history is requested for the row.
+- Lists are drawn in line, area and bar charts; pies and heatmaps leave them out.
+
+### Areas without a line
+
+![Solar power as a line and the forecast and its low estimate as see-through grey areas, in a dark theme](images/forecast-areas.png)
+
+`line_style: none` hides the line and leaves its fill, and `fill_opacity` gives an even fill instead of one that fades downwards. Each estimate is a row of its own:
+
+```yaml
+  - entity: sensor.pv_forecast_today
+    name: Forecast
+    unit: kW
+    line_style: none
+    fill: true
+    fill_opacity: 0.35
+    attribute: { name: detailedForecast, value: pv_estimate }
+  - entity: sensor.pv_forecast_today
+    name: Forecast 10%
+    unit: kW
+    line_style: none
+    fill: true
+    fill_opacity: 0.35
+    attribute: { name: detailedForecast, value: pv_estimate10 }
+```
+
 ## Entities with states
 
 ![Two entities with states drawn as coloured strips](images/timeline.png)

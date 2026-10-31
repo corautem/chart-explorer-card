@@ -10,7 +10,7 @@ Edit the card from the dashboard editor like any built-in card. The editor has f
 
 | Tab | What it holds |
 |---|---|
-| Entities | A search box at the top adds an entity. Below it, the entities in order, each with its colour: drag the handle to reorder (or focus it and use the arrow keys), the pencil opens the entity's settings in one scroll, and the bin removes. The entity page shows the settings for how the entity is drawn (Draw as): line shape, type, width and fill for lines; the states that shade a band; a colour picker per state for timelines and bands (states from the last 30 days, and any you add); then name, colour, show in the values row, show the name, show unit, unit, decimal places, scale and the value drawn on long windows. |
+| Entities | A search box at the top adds an entity. Below it, the entities in order, each with its colour: drag the handle to reorder (or focus it and use the arrow keys), the pencil opens the entity's settings in one scroll, and the bin removes. The entity page shows where the line comes from (Draw from: the recorded history, or a list in one of the entity's attributes, with the keys in each item) and how the entity is drawn (Draw as): line shape, type, width and fill for lines; the states that shade a band; a colour picker per state for timelines and bands (states from the last 30 days, and any you add); then name, colour, show in the values row, show the name, show unit, unit, decimal places, scale and the value drawn on long windows. |
 | General | Title, chart type, starting window and what dragging the chart does, then folding groups: Bars (length of each bar, stacking; shown for bar charts), Quick ranges (the seven standard lengths at the top of the Presets menu; tap to show or hide), Menu entries (the nine presets, the same way) and Toolbar (position top, bottom or off, and a switch for each control). Quick ranges add lengths with "Past [number] [unit] Add length"; menu entries choose Past or Next, so a length can run into the future ("Next day"). Added lengths follow the standard ones in an amber shade, switch on and off, and × deletes them. |
 | Visual | Folding groups: values (above or below the chart, row alignment, value position, name alignment, value and name text size, space between values, show names), chart (faded line opacity, the now line, floating tooltip, rescaling), height and space inside the chart, timeline strips (strip height, names above the strips, states written inside), x-axis (time labels, their size, vertical grid lines) and y-axis (value labels, their size, units above the axes, starting at zero, horizontal grid lines). |
 | Advanced | Lightweight mode and animations, data sources, the value drawn on long windows for every entity, CSV export. Each setting has an explanation under it. |
@@ -83,6 +83,7 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | Option | Default | Description |
 |---|---|---|
 | `entity` | required | Entity ID. |
+| `attribute` | none | Draw a list kept in an attribute instead of the recorded history, such as a solar forecast: the attribute's name, or `{ name, time, value, low, high }` with the keys in each item; `low` and `high` add a shaded range. See [Forecasts and other lists](chart-types.md#forecasts-and-other-lists-from-attributes). |
 | `type` | automatic | How the entity is drawn: `line`, `bar`, `timeline` or `band`. Automatic draws numbers as lines (bars in a bar chart) and text or on/off states as a timeline strip. |
 | `state_colors` | automatic | Colours for states of a timeline or band, such as `{ standby: "#9e9e9e", defrost: "#3987e5" }`. |
 | `on_states` | all but quiet states | For bands: the states that shade the chart, such as `[heat, defrost]`. |
@@ -90,8 +91,9 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | `color` | from the palette | Any CSS colour for the line and the value. |
 | `unit` | the entity's unit | Unit shown after the value. |
 | `curve` | `smooth` | `smooth`, `straight` or `step`. |
-| `line_style` | automatic | `solid`, `dashed` or `dotted`. Automatic is solid, and dashed from the ninth entity on. |
-| `fill` | `false` | Gradient fill under the line. |
+| `line_style` | automatic | `solid`, `dashed`, `dotted` or `none` (no line, only its fill or shaded range). Automatic is solid, and dashed from the ninth entity on. |
+| `fill` | `false` | Fill under the line, fading downwards unless `fill_opacity` is set. |
+| `fill_opacity` | fading | 0 to 1: an even fill at this opacity, such as `0.35`, instead of a fill that fades downwards. |
 | `width` | `2` | Line width in pixels. |
 | `y_axis` | by unit | `left`, `right`, or any other name for a separate unlabelled scale. By default the first unit uses the left axis, the second the right, and further units get their own scale. |
 | `decimals` | the entity's display precision | Decimal places for the value. |

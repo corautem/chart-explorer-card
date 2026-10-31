@@ -4,6 +4,7 @@ import type { HomeAssistant } from '../ha-types';
 import { seriesColor, toHex, toRgb } from '../chart/theme';
 import { isMissingState, stateColor, type StateColorContext } from '../chart/states';
 import { isStateKind, kindSettled, rowKind } from '../rows';
+import { itemKeys, listAttributes } from '../data/attribute';
 import { DEFAULT_QUICK_RANGES } from '../config';
 import { PRESET_IDS } from '../time/range';
 import {
@@ -36,6 +37,7 @@ import {
   toForm,
   type EntityItem,
   type FormData,
+  type ListSource,
 } from './schema';
 
 type Tab = 'entities' | 'general' | 'visual' | 'advanced';
@@ -580,18 +582,26 @@ export class ChartExplorerCardEditor extends LitElement {
     const type = typeof item === 'string' ? undefined : item.type;
     const chartType = (this._form.chart_type as CardConfigInput['chart_type']) ?? 'line';
     const stateObj = this.hass?.states[id];
+    // A list from one of the entity's attributes, such as a forecast, is drawn as a line.
+    const source = typeof item === 'string' ? undefined : item.attribute;
+    const chosen = (typeof source === 'string' ? source : source?.name) ?? '';
+    const list: ListSource = {
+      attributes: listAttributes(stateObj?.attributes),
+      keys: chosen ? itemKeys(stateObj?.attributes[chosen]) : [],
+      chosen,
+    };
     // States recorded in the last 30 days decide for a sensor that is unavailable or unknown right now.
     const recorded = this._seenStates.get(id);
-    const kind = rowKind(type, chartType, stateObj, recorded);
+    const kind = chosen ? 'line' : rowKind(type, chartType, stateObj, recorded);
     const autoKind = rowKind('auto', chartType, stateObj, recorded);
-    if (!kindSettled('auto', stateObj, recorded) && !this._seenStates.has(id) && !this._fetching.has(id)) this._fetchStates(id);
+    if (!chosen && !kindSettled('auto', stateObj, recorded) && !this._seenStates.has(id) && !this._fetching.has(id)) this._fetchStates(id);
     const states = isStateKind(kind) ? this._knownStates(item) : [];
     return html`
       <div class="edit-head">
         <button class="back" @click=${this._closeEditor}>${icon('back')}<span>All entities</span></button>
         <span class="edit-title">${this._displayName(item)}</span>
       </div>
-      ${this._entityForm(entitySchema(kind, autoKind, states), item, index, defaultColor)}
+      ${this._entityForm(entitySchema(kind, autoKind, states, list), item, index, defaultColor)}
       ${isStateKind(kind) ? this._renderStateColors(item, index, states) : nothing}
       <div class="edit-actions">
         <button class="danger" @click=${() => this._remove(index)}>${icon('delete')}<span>Remove this entity</span></button>

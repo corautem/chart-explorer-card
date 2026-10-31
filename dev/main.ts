@@ -116,6 +116,50 @@ CONFIGS.push(
     default_range: '7d',
     entities: [{ entity: 'sensor.demo_heat_pump_status', name: 'Status' }],
   },
+  {
+    type: 'custom:chart-explorer-card',
+    title: 'Solar forecast',
+    default_range: 'today',
+    entities: [
+      { entity: 'sensor.demo_solar_power', name: 'Solar power', color: '#f5a623' },
+      {
+        entity: 'sensor.demo_pv_forecast',
+        name: 'Forecast',
+        unit: 'kW',
+        color: '#9e9e9e',
+        line_style: 'dashed',
+        attribute: { name: 'detailedForecast', value: 'pv_estimate', low: 'pv_estimate10', high: 'pv_estimate90' },
+      },
+    ],
+  },
+  {
+    type: 'custom:chart-explorer-card',
+    title: 'Solar forecast as areas',
+    default_range: 'today',
+    entities: [
+      { entity: 'sensor.demo_solar_power', name: 'Solar power', color: '#f5a623' },
+      {
+        entity: 'sensor.demo_pv_forecast',
+        name: 'Forecast',
+        unit: 'kW',
+        color: '#9e9e9e',
+        line_style: 'none',
+        fill: true,
+        fill_opacity: 0.35,
+        attribute: { name: 'detailedForecast', value: 'pv_estimate' },
+      },
+      {
+        entity: 'sensor.demo_pv_forecast',
+        name: 'Forecast 10%',
+        unit: 'kW',
+        color: '#bdbdbd',
+        line_style: 'none',
+        fill: true,
+        fill_opacity: 0.35,
+        attribute: { name: 'detailedForecast', value: 'pv_estimate10' },
+      },
+    ],
+  },
 );
 
 if (params.get('perf')) {

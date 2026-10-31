@@ -1,6 +1,6 @@
 {
   "name": "chart-explorer-card",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Home Assistant dashboard card: lines, stacked areas, bars, pie, heatmap and state timelines with a time-range toolbar, drag and pinch zoom, and CSV/PNG export.",
   "license": "GPL-3.0-only",
   "private": true,

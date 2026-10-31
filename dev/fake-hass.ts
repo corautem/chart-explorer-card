@@ -19,6 +19,8 @@ interface FakeEntity {
   interval: number;
   value(t: number): number | string;
   precision?: number;
+  /** Further attributes, such as a forecast list. */
+  extra?(now: number): Record<string, unknown>;
 }
 
 /** Deterministic noise in [-1, 1] for a time step and seed. */
@@ -55,6 +57,36 @@ const status = (t: number): string => {
   if (noise(slot, 11) > 0.93) return 'unknown';
   if (!heatingOn(t)) return noise(slot, 12) > 0.75 ? 'hot_water' : 'standby';
   return noise(slot, 13) > 0.85 ? 'defrost' : 'heating';
+};
+
+/** Clear-sky solar power in kW for a local time: a curve from 07:30 to 17:00, highest at noon. */
+const clearSky = (t: number) => {
+  const d = new Date(t);
+  const hours = d.getHours() + d.getMinutes() / 60;
+  return hours < 7.5 || hours > 17 ? 0 : 3 * Math.sin((Math.PI * (hours - 7.5)) / 9.5) ** 1.5;
+};
+/** Measured solar power: the clear-sky curve with passing clouds. */
+const solar = (t: number) => {
+  const clouds = 0.75 + 0.25 * noise(Math.floor(t / (40 * MINUTE)), 21) + 0.08 * noise(Math.floor(t / MINUTE), 22);
+  return Math.max(0, clearSky(t) * clouds);
+};
+/** A Solcast-style forecast: half-hour slots for today and tomorrow, with low and high estimates. */
+const forecastSlots = (now: number) => {
+  const start = new Date(now);
+  start.setHours(0, 0, 0, 0);
+  const slots: Record<string, unknown>[] = [];
+  for (let k = 0; k < 96; k++) {
+    const at = start.getTime() + k * 30 * MINUTE;
+    const estimate = clearSky(at + 15 * MINUTE) * (0.72 + 0.1 * noise(Math.floor(at / DAY), 23));
+    const round = (value: number) => Math.round(value * 100) / 100;
+    slots.push({
+      period_start: new Date(at).toISOString(),
+      pv_estimate: round(estimate),
+      pv_estimate10: round(estimate * 0.55),
+      pv_estimate90: round(estimate * 1.2),
+    });
+  }
+  return slots;
 };
 
 export const ENTITIES: FakeEntity[] = [
@@ -145,6 +177,28 @@ export const ENTITIES: FakeEntity[] = [
     value: (t) => 300 + 200 * Math.max(0, daily(t)) + 80 * noise(Math.floor(t / MINUTE), 9),
   },
   {
+    id: 'sensor.demo_solar_power',
+    name: 'Demo solar power',
+    unit: 'kW',
+    stateClass: 'measurement',
+    deviceClass: 'power',
+    interval: MINUTE,
+    precision: 2,
+    value: solar,
+  },
+  {
+    id: 'sensor.demo_pv_forecast',
+    name: 'Demo PV forecast today',
+    unit: 'kWh',
+    interval: 30 * MINUTE,
+    precision: 2,
+    value: (t) => {
+      const slots = forecastSlots(t).slice(0, 48);
+      return slots.reduce((sum, slot) => sum + (slot.pv_estimate as number) / 2, 0);
+    },
+    extra: (now) => ({ detailedForecast: forecastSlots(now) }),
+  },
+  {
     id: 'sensor.demo_no_statistics',
     name: 'Demo value without statistics',
     unit: '%',
@@ -195,6 +249,7 @@ function stateObject(entity: FakeEntity, now: number): HassEntity {
       ...(entity.stateClass ? { state_class: entity.stateClass } : {}),
       ...(entity.deviceClass ? { device_class: entity.deviceClass } : {}),
       ...(entity.options ? { options: entity.options } : {}),
+      ...(entity.extra ? entity.extra(now) : {}),
     },
     last_changed: changed,
     last_updated: changed,

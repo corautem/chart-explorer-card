@@ -9,6 +9,7 @@ A Home Assistant dashboard card for exploring history: lines, stacked areas, bar
 ## Features
 
 - **Eight ways to draw history:** lines, stacked areas, bars per hour, day, week or month, pie, donut, heatmaps of numbers or of states, and timeline strips or shaded bands for entities such as a heat pump status or a door.
+- **Forecasts and other lists:** a list kept in an attribute, such as a solar forecast or electricity prices, is drawn into the future, with a shaded range from a low to a high estimate.
 - **Time controls in one row:** previous and next, Now, and a Presets menu with quick ranges from 1 hour to 1 year, presets such as Today or Last month, and a custom range.
 - **Drag to move, pinch to zoom:** the card loads finer data as you zoom in; a double-tap goes back.
 - **Values that follow the cursor:** each entity's value sits above the chart in its colour; tap a name to fade that entity.
@@ -46,7 +47,7 @@ A picture and an example for each: [Chart types](docs/chart-types.md).
 1. Download both files from the [latest release](https://github.com/corautem/chart-explorer-card/releases/latest): `chart-explorer-card.js` (the card) and `chart-explorer-card-editor.js` (the visual editor, loaded only when you edit a card).
 2. Copy them into your Home Assistant configuration folder, in `/config/www/chart-explorer-card/`.
 3. In Home Assistant, open **Settings → Dashboards**, then the three-dot menu → **Resources** → **Add resource**. (The Resources entry appears only with **Advanced mode** on in your user profile.)
-   - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.7.0`
+   - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.8.0`
    - Type: **JavaScript module**
 4. Reload the browser.
 
@@ -143,6 +144,33 @@ entities:
 </details>
 
 <details>
+<summary><b>A solar forecast beside the measured power</b></summary>
+
+The forecast comes from a list in the forecast sensor's `detailedForecast` attribute, as Solcast and Predbat keep it. See [Forecasts and other lists](docs/chart-types.md#forecasts-and-other-lists-from-attributes).
+
+```yaml
+type: custom:chart-explorer-card
+title: Solar forecast
+default_range: today
+entities:
+  - entity: sensor.solar_power
+    name: Solar power
+  - entity: sensor.pv_forecast_today
+    name: Forecast
+    unit: kW
+    line_style: dashed
+    attribute:
+      name: detailedForecast
+      value: pv_estimate
+      low: pv_estimate10
+      high: pv_estimate90
+```
+
+![Measured solar power with the forecast as a dashed line and a shaded range from the low to the high estimate](docs/images/forecast.png)
+
+</details>
+
+<details>
 <summary><b>A clean card: the value only, toolbar at the bottom without dates</b></summary>
 
 ```yaml
@@ -186,7 +214,7 @@ entities:
 
 ## Documentation
 
-- [Chart types](docs/chart-types.md): a picture and an example for each chart type, entities with states, bands and state colours.
+- [Chart types](docs/chart-types.md): a picture and an example for each chart type, forecasts and other lists from attributes, entities with states, bands and state colours.
 - [Using the card](docs/usage.md): the toolbar, the values row, moving and zooming.
 - [Options](docs/options.md): every card and entity option, and the visual editor's tabs.
 - [Data and export](docs/data-and-export.md): where the data comes from, and what the CSV and PNG contain.

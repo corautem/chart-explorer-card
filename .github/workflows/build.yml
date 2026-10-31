@@ -25,6 +25,9 @@ jobs:
       - run: npm run build
 
   hacs:
+    # HACS looks for the card in the latest release, so on a release this waits until the files are attached.
+    needs: [test, release]
+    if: always() && needs.test.result == 'success' && needs.release.result != 'failure'
     runs-on: ubuntu-latest
     steps:
       - uses: hacs/action@main

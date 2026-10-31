@@ -1,0 +1,57 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      # Unit tests in four time zones. The browser checks (npm run check) need Chromium and run locally.
+      - run: npm test
+      - run: npm run build
+
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: hacs/action@main
+        with:
+          category: plugin
+
+  release:
+    # Builds the published release and attaches both files, which HACS downloads.
+    if: github.event_name == 'release'
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Check that the tag matches the version in package.json
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: test "$TAG" = "v$(node -p "require('./package.json').version")"
+      - name: Attach the card and its editor to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" dist/chart-explorer-card.js dist/chart-explorer-card-editor.js --clobber

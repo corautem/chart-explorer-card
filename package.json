@@ -1,0 +1,26 @@
+{
+  "name": "chart-explorer-card",
+  "version": "0.6.2",
+  "description": "Home Assistant dashboard card: lines, stacked areas, bars, pie, heatmap and state timelines with a time-range toolbar, drag and pinch zoom, and CSV/PNG export.",
+  "license": "GPL-3.0-or-later",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build && vite build --mode editor && node scripts/size-report.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "node scripts/test-all-zones.mjs",
+    "test:quick": "vitest run",
+    "check": "node scripts/check.mjs"
+  },
+  "dependencies": {
+    "echarts": "6.1.0",
+    "lit": "3.3.3"
+  },
+  "devDependencies": {
+    "playwright-core": "1.64.1",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vitest": "4.1.12"
+  }
+}

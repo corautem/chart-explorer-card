@@ -1,0 +1,4 @@
+node_modules/
+dist/
+dev-output/
+.claude/settings.local.json

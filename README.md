@@ -9,7 +9,7 @@ A Home Assistant dashboard card for exploring history: lines, stacked areas, bar
 ## Features
 
 - **Eight ways to draw history:** lines, stacked areas, bars per hour, day, week or month, pie, donut, heatmaps of numbers or of states, and timeline strips or shaded bands for entities such as a heat pump status or a door.
-- **Time controls in one row:** buttons from 1 hour to 1 year, presets such as Today or Last month, previous and next, and a custom range.
+- **Time controls in one row:** previous and next, Now, and a Presets menu with quick ranges from 1 hour to 1 year, presets such as Today or Last month, and a custom range.
 - **Drag to move, pinch to zoom:** the card loads finer data as you zoom in; a double-tap goes back.
 - **Values that follow the cursor:** each entity's value sits above the chart in its colour; tap a name to fade that entity.
 - **Export:** a CSV of exactly what is shown, or a PNG with the title and legend.
@@ -46,7 +46,7 @@ A picture and an example for each: [Chart types](docs/chart-types.md).
 1. Download both files from the [latest release](https://github.com/corautem/chart-explorer-card/releases/latest): `chart-explorer-card.js` (the card) and `chart-explorer-card-editor.js` (the visual editor, loaded only when you edit a card).
 2. Copy them into your Home Assistant configuration folder, in `/config/www/chart-explorer-card/`.
 3. In Home Assistant, open **Settings → Dashboards**, then the three-dot menu → **Resources** → **Add resource**. (The Resources entry appears only with **Advanced mode** on in your user profile.)
-   - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.6.2`
+   - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.7.0`
    - Type: **JavaScript module**
 4. Reload the browser.
 
@@ -73,7 +73,7 @@ The editor saves only what differs from the defaults, so the YAML stays short. E
 
 ## Using the card
 
-- **Toolbar:** ‹ › move the window by its own length, Now returns to the present, the buttons and the Presets menu pick a window, the dates open a custom range, and the download button saves a CSV or PNG.
+- **Toolbar:** ‹ › move the window by its own length, Now returns to the present, the Presets menu picks a window (quick ranges at its top), the dates open a custom range, and the download button saves a CSV or PNG.
 - **Moving and zooming:** drag sideways to move through time; pinch, or hold Ctrl and use the mouse wheel, to zoom; hold Shift and drag to zoom into a part; double-click or double-tap to go back.
 - **Values:** hover over or tap the chart to see the readings at that moment; tap a value for the entity's details; tap a name to fade the entity and leave it out of the CSV.
 
@@ -170,6 +170,6 @@ I build Chart Explorer Card in my spare time. If it's useful to you, a star on G
 
 Copyright (C) 2026 the Chart Explorer Card contributors.
 
-Chart Explorer Card is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version. It is distributed in the hope that it will be useful, but without any warranty; see the [GNU General Public License](LICENSE) for details.
+Chart Explorer Card is free software: you can redistribute it and/or modify it under the terms of version 3 of the GNU General Public License as published by the Free Software Foundation (GPL-3.0-only). It is distributed in the hope that it will be useful, but without any warranty; see the [GNU General Public License](LICENSE) for details.
 
 The built files include [Apache ECharts](https://github.com/apache/echarts) (Apache License 2.0, with code from [d3](https://github.com/d3/d3) under the BSD 3-Clause License), [ZRender](https://github.com/ecomfe/zrender) and [Lit](https://github.com/lit/lit) (BSD 3-Clause License), [tslib](https://github.com/microsoft/tslib) (0BSD) and icon paths from [Material Design Icons](https://github.com/Templarian/MaterialDesign) (Apache License 2.0). Their licence texts are in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and a short notice sits at the top of each built file.

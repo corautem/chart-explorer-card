@@ -11,7 +11,7 @@ Edit the card from the dashboard editor like any built-in card. The editor has f
 | Tab | What it holds |
 |---|---|
 | Entities | A search box at the top adds an entity. Below it, the entities in order, each with its colour: drag the handle to reorder (or focus it and use the arrow keys), the pencil opens the entity's settings in one scroll, and the bin removes. The entity page shows the settings for how the entity is drawn (Draw as): line shape, type, width and fill for lines; the states that shade a band; a colour picker per state for timelines and bands (states from the last 30 days, and any you add); then name, colour, show in the values row, show the name, show unit, unit, decimal places, scale and the value drawn on long windows. |
-| General | Title, chart type, starting window and what dragging the chart does, then folding groups: Bars (length of each bar, stacking; shown for bar charts), Toolbar buttons (the seven standard lengths; tap to show or hide), Menu entries (the nine presets, the same way) and Toolbar (position top, bottom or off, and a switch for each control). Toolbar buttons add lengths with "Past [number] [unit] Add length"; menu entries choose Past or Next, so a length can run into the future ("Next day"). Added lengths follow the standard ones in an amber shade, switch on and off, and × deletes them. |
+| General | Title, chart type, starting window and what dragging the chart does, then folding groups: Bars (length of each bar, stacking; shown for bar charts), Quick ranges (the seven standard lengths at the top of the Presets menu; tap to show or hide), Menu entries (the nine presets, the same way) and Toolbar (position top, bottom or off, and a switch for each control). Quick ranges add lengths with "Past [number] [unit] Add length"; menu entries choose Past or Next, so a length can run into the future ("Next day"). Added lengths follow the standard ones in an amber shade, switch on and off, and × deletes them. |
 | Visual | Folding groups: values (above or below the chart, row alignment, value position, name alignment, value and name text size, space between values, show names), chart (faded line opacity, the now line, floating tooltip, rescaling), height and space inside the chart, timeline strips (strip height, names above the strips, states written inside), x-axis (time labels, their size, vertical grid lines) and y-axis (value labels, their size, units above the axes, starting at zero, horizontal grid lines). |
 | Advanced | Lightweight mode and animations, data sources, the value drawn on long windows for every entity, CSV export. Each setting has an explanation under it. |
 
@@ -30,15 +30,15 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | `timeline_names` | `true` | The entity name above each strip. |
 | `timeline_labels` | `true` | The state written inside each part of a strip that is wide enough. |
 | `default_range` | `24h` | Window when the card opens: a quick range (`6h`, `7d`) or a preset (`today`, `this_week`, `last_month` …). |
-| `quick_ranges` | `[1h, 6h, 12h, 24h, 7d, 30d, 1y]` | Toolbar buttons: lengths (a number followed by `m`, `h`, `d`, `w`, `mo` or `y`, such as `45m` or `6d`) or presets. |
+| `quick_ranges` | `[1h, 6h, 12h, 24h, 7d, 30d, 1y]` | Quick ranges at the top of the Presets menu: lengths (a number followed by `m`, `h`, `d`, `w`, `mo` or `y`, such as `45m` or `6d`) or presets. |
 | `unused_quick_ranges`, `unused_presets` | none | Lengths you added in the editor and switched off; the editor keeps them so you can switch them on again. The card ignores them. |
 | `presets` | all nine presets | Menu entries, the same kinds as `quick_ranges`. A length with a plus sign, such as `+1d` ("Next day"), starts now and runs into the future, for forecasts. The presets are `today`, `yesterday`, `tomorrow`, `this_week`, `last_week`, `this_month`, `last_month`, `this_year` and `last_year`. |
 | `toolbar_position` | `top` | `top`, `bottom` or `off`. |
-| `show_range_label` | `true` | The dates and times in the middle of the toolbar. Turned off, their space stays empty, so nothing else moves into it, and the toolbar buttons (1h, 6h…) move to the top of the Presets menu at any card width. |
+| `show_range_label` | `true` | The dates and times in the middle of the toolbar. Turned off, their space stays empty, so nothing else moves into it. |
 | `show_arrows` | `true` | The previous and next arrows. |
 | `show_now_button` | `true` | The Now button. |
-| `show_quick_ranges` | `true` | The toolbar buttons (1h, 6h…). |
-| `show_presets_menu` | `true` | The Presets menu, which also holds Custom… and the toolbar buttons when the card is narrow or the dates and times are off. Without it they stay in the toolbar and scroll sideways. |
+| `show_quick_ranges` | `true` | The quick ranges (1h, 6h…) at the top of the Presets menu. |
+| `show_presets_menu` | `true` | The Presets menu, which holds the quick ranges, the menu entries and Custom…; turned off, none of them are shown. |
 | `show_download` | `true` | The download button. With every toolbar control off, the toolbar row goes. |
 | `drag_action` | `pan` | What dragging across the chart does: `pan` moves the time window, `zoom` selects a part to zoom into. |
 | `values_placement` | `above` | The values row `above` or `below` the chart. |

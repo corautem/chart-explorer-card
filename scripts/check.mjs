@@ -35,12 +35,19 @@ async function open(query = '', viewport = { width: 820, height: 1000 }, extra =
 
 const card = (n = 1) => `.slot:nth-of-type(${n}) chart-explorer-card`;
 const label = async (page, n = 1) => (await page.locator(`${card(n)} .label`).innerText()).replace(/\s*\n\s*/g, ' ');
-// Picks a quick range inline, or from the menu when the toolbar has folded them away.
+// Picks a quick range from the top of the Presets menu.
 async function quick(page, id, n = 1) {
-  const inline = page.locator(`${card(n)} .quick button`, { hasText: id });
-  if (await inline.isVisible()) return inline.click();
   await page.locator(`${card(n)} .with-icon`).click();
-  await page.locator(`${card(n)} .menu button`, { hasText: id }).first().click();
+  await page.locator(`${card(n)} .menu .chips button`, { hasText: id }).first().click();
+}
+// The quick range marked as picked at the top of the Presets menu.
+async function activeQuick(page, n = 1) {
+  await page.locator(`${card(n)} .with-icon`).click();
+  const active = page.locator(`${card(n)} .menu .chips button.active`);
+  const text = (await active.count()) ? (await active.textContent()).trim() : '';
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(100);
+  return text;
 }
 try {
   // ---- Screenshots ----
@@ -55,10 +62,9 @@ try {
     const { page, context } = await open('?width=390&live=0', { width: 420, height: 1100 }, { hasTouch: true, isMobile: true });
     await page.waitForTimeout(1500);
     await page.screenshot({ path: `${OUT}/phone-light.png`, fullPage: true });
-    const compact = await page.locator(`${card(1)} .toolbar.folded`).count();
-    check('narrow card: quick ranges fold into the menu', compact === 1);
+    check('narrow card: no quick ranges in the toolbar', (await page.locator(`${card(1)} .toolbar .quick`).count()) === 0);
     await page.locator(`${card(1)} .with-icon`).click();
-    const quickInMenu = await page.locator(`${card(1)} .menu button`, { hasText: '24h' }).count();
+    const quickInMenu = await page.locator(`${card(1)} .menu .chips button`, { hasText: '24h' }).count();
     check('narrow card: menu lists the quick ranges', quickInMenu === 1);
     await page.screenshot({ path: `${OUT}/phone-menu.png`, fullPage: true });
     await context.close();
@@ -86,8 +92,8 @@ try {
 
     await page.locator(`${card()} .toolbar button`, { hasText: 'Now' }).click();
     await page.waitForTimeout(900);
-    const active = await page.locator(`${card()} .quick button.active`).textContent();
-    check('Now returns to the live 7d window', active.trim() === '7d', active);
+    const active = await activeQuick(page);
+    check('Now returns to the live 7d window', active === '7d', active);
 
     await page.locator(`${card()} .with-icon`).click();
     await page.locator(`${card()} .menu button`, { hasText: 'Last week' }).click();
@@ -165,8 +171,8 @@ try {
 
     await page.mouse.dblclick(box.x + box.width * 0.5, box.y + box.height * 0.5);
     await page.waitForTimeout(900);
-    const back = await page.locator(`${card()} .quick button.active`).textContent();
-    check('double-click goes back to the window picked in the toolbar', back.trim() === '24h', back);
+    const back = await activeQuick(page);
+    check('double-click goes back to the window picked in the toolbar', back === '24h', back);
 
     await page.mouse.move(0, 0);
     await page.locator(`${card()} .item .name`).nth(3).click();
@@ -352,8 +358,10 @@ try {
     check('a custom length is added and switched on', (await saved()).quick_ranges[0] === '45m');
     check('custom lengths come after the standard ones, in their own shade',
       (await page.locator(`${toolbarList} .toggle`).last().getAttribute('class')).includes('custom'));
-    const buttons = (await page.locator(`${card()} .quick button`).allTextContents()).map((b) => b.trim());
-    check('the toolbar shows 45m and not 6h', buttons.includes('45m') && !buttons.includes('6h'), buttons.join(' '));
+    await page.locator(`${card()} .with-icon`).click();
+    const buttons = (await page.locator(`${card()} .menu .chips button`).allTextContents()).map((b) => b.trim());
+    await page.keyboard.press('Escape');
+    check('the menu shows 45m and not 6h', buttons.includes('45m') && !buttons.includes('6h'), buttons.join(' '));
     await page.locator(`${toolbarList} .toggle.custom .toggle-main`).click();
     await page.waitForTimeout(250);
     let cfg = await saved();
@@ -391,7 +399,7 @@ try {
       return { startsNow: Math.abs(w.start - Date.now()) < 120000, hours: (w.end - w.start) / 3600000 };
     }, card());
     check('Next day runs from now into the future', nextWindow.startsNow && nextWindow.hours === 24, JSON.stringify(nextWindow));
-    await page.locator(`${card()} .quick button`, { hasText: '24h' }).click();
+    await quick(page, '24h');
     await page.waitForTimeout(500);
     await page.screenshot({ path: `${OUT}/editor-general.png`, fullPage: true });
     check('dragging the chart sits under the starting window, outside the groups',
@@ -650,7 +658,7 @@ try {
     await context.close();
   }
   for (const width of [470, 900]) {
-    // Hidden dates keep their space empty: the quick ranges stay in the menu at any width.
+    // The quick ranges live in the Presets menu at any width, with the dates on or off.
     const { page, context, errors } = await open(`?only=1&live=0&delay=50&width=${width}`);
     await page.waitForTimeout(1000);
     const toolbarAt = async (extra) => {
@@ -663,24 +671,25 @@ try {
         });
       }, [card(), extra]);
       await page.waitForTimeout(800);
-      const bar = await page.evaluate((sel) => {
-        const quick = document.querySelector(sel).shadowRoot.querySelector('.toolbar .quick');
-        return { quick: quick ? getComputedStyle(quick).display : 'absent' };
-      }, card());
-      await page.locator(`${card()} .toolbar button[aria-haspopup="menu"]`).first().click();
+      const inToolbar = await page.locator(`${card()} .toolbar .quick`).count();
+      await page.locator(`${card()} .with-icon`).click();
       await page.waitForTimeout(200);
-      bar.menu = await page.locator(`${card()} .menu .chips button`).count();
+      const menu = await page.locator(`${card()} .menu .chips button`).count();
       await page.keyboard.press('Escape');
       await page.waitForTimeout(200);
-      return bar;
+      return { inToolbar, menu };
     };
     const shown = await toolbarAt({ show_range_label: true });
     const hidden = await toolbarAt({ show_range_label: false });
-    const off = await toolbarAt({ show_range_label: false, show_quick_ranges: false });
-    if (width === 470) check('at 470 px the visible dates push the quick ranges into the menu', shown.quick === 'none' && shown.menu === 7, JSON.stringify(shown));
-    else check('at 900 px the quick ranges fit beside the visible dates', shown.quick === 'flex' && shown.menu === 0, JSON.stringify(shown));
-    check(`at ${width} px hidden dates keep the quick ranges in the menu`, hidden.quick === 'none' && hidden.menu === 7, JSON.stringify(hidden));
+    const off = await toolbarAt({ show_quick_ranges: false });
+    check(`at ${width} px with the dates on, the quick ranges are in the menu only`, shown.inToolbar === 0 && shown.menu === 7, JSON.stringify(shown));
+    check(`at ${width} px with the dates off, the quick ranges are in the menu only`, hidden.inToolbar === 0 && hidden.menu === 7, JSON.stringify(hidden));
     check(`at ${width} px quick ranges switched off leave the menu too`, off.menu === 0, JSON.stringify(off));
+    await toolbarAt({});
+    await quick(page, '24h');
+    await page.waitForTimeout(300);
+    const named = (await page.locator(`${card()} .with-icon`).innerText()).trim();
+    check(`at ${width} px the menu button names the quick range picked`, /Past 24 hours/.test(named), named);
     check(`toolbar at ${width} px loads without errors`, errors.length === 0, errors.join(' | '));
     await context.close();
   }

@@ -104,16 +104,6 @@ export const cardStyles = css`
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  .quick {
-    display: flex;
-    flex: none;
-  }
-  .quick button {
-    padding: 0 6px;
-  }
-  .folded .quick {
-    display: none;
-  }
 
   /* Menus and the custom range */
   .menu,
@@ -258,12 +248,6 @@ export const cardStyles = css`
   .stacked .label.placeholder {
     flex-direction: column;
     font-size: 12px;
-  }
-  .no-menu .quick {
-    flex: 0 1 auto;
-    min-width: 0;
-    overflow-x: auto;
-    scrollbar-width: none;
   }
   .pie-name {
     position: absolute;

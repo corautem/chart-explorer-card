@@ -52,7 +52,7 @@ import { buttonLabel, menuLabel, presetName, t, type StringKey } from './localiz
 import { icon } from './ui/icons';
 import { cardStyles } from './ui/styles';
 
-const VERSION = '0.6.2';
+const VERSION = '0.7.0';
 // The chart's inner edge and ECharts' gap between numbers and the plot, in pixels.
 const GRID_EDGE = 4;
 const LABEL_MARGIN = 8;
@@ -151,7 +151,7 @@ export class ChartExplorerCard extends LitElement {
   private _customFrom = '';
   private _customTo = '';
   private _customError?: string;
-  /** 0 full toolbar, 1 two-line label, 2 quick ranges in the menu, 3 label may be cut short. */
+  /** 0 full toolbar, 1 two-line label, 2 label may be cut short. */
   private _toolbarLevel = 0;
   private readonly _levelWidths: number[] = [];
 
@@ -1532,14 +1532,14 @@ export class ChartExplorerCard extends LitElement {
 
   /**
    * Keeps the toolbar on one row. When it does not fit, the label first goes
-   * onto two lines, then the quick ranges move into the menu, then the label
-   * may be cut short. Each step remembers the width it needed, to step back.
+   * onto two lines, then it may be cut short. Each step remembers the width it
+   * needed, to step back.
    */
   private _checkToolbar(): void {
     const bar = this.renderRoot.querySelector<HTMLElement>('.toolbar');
     if (!bar || !bar.clientWidth) return;
     const available = bar.clientWidth;
-    if (bar.scrollWidth > available + 1 && this._toolbarLevel < 3) {
+    if (bar.scrollWidth > available + 1 && this._toolbarLevel < 2) {
       this._levelWidths[this._toolbarLevel] = bar.scrollWidth;
       this._toolbarLevel++;
       this.requestUpdate();
@@ -1759,7 +1759,7 @@ export class ChartExplorerCard extends LitElement {
     const bottom = config.toolbarPosition === 'bottom';
     const show = config.toolbar;
     const anyControl =
-      show.arrows || show.now || show.quickRanges || show.presets || show.download || config.showRangeLabel;
+      show.arrows || show.now || show.presets || show.download || config.showRangeLabel;
     const toolbar = anyControl && config.toolbarPosition !== 'off' ? this._renderToolbar(config) : nothing;
     const values = this._renderValues(config);
     const below = config.valuesPlacement === 'below';
@@ -1798,16 +1798,16 @@ export class ChartExplorerCard extends LitElement {
     const shown = this._preview ?? w;
     const inclusive = !this._preview && spec ? labelEndIsInclusive(spec) : false;
     const [from, to] = shown ? this._times.rangeParts(shown, inclusive, Date.now()) : ['', ''];
-    // The toolbar buttons and the menu may list lengths and presets alike.
-    const activeMenuItem = config.presets.find((item) => this._isActive(item));
-    const activePreset = spec ? presetOf(spec) : undefined;
-    const menuText = activeMenuItem ? menuLabel(activeMenuItem) : activePreset ? presetName(activePreset) : t('presets');
     const level = this._toolbarLevel;
     const show = config.toolbar;
-    // Without the menu, quick ranges cannot fold into it; they scroll sideways instead.
-    const classes =
-      `toolbar${level >= 1 ? ' stacked' : ''}${this._quickInMenu(config) ? ' folded' : ''}` +
-      `${level >= 3 ? ' shrink' : ''}${show.presets ? '' : ' no-menu'}`;
+    // The menu holds the quick ranges and the entries, which may list lengths and presets alike;
+    // its button names the window picked from either.
+    const activeMenuItem = [...(show.quickRanges ? config.quickRanges : []), ...config.presets].find((item) =>
+      this._isActive(item),
+    );
+    const activePreset = spec ? presetOf(spec) : undefined;
+    const menuText = activeMenuItem ? menuLabel(activeMenuItem) : activePreset ? presetName(activePreset) : t('presets');
+    const classes = `toolbar${level >= 1 ? ' stacked' : ''}${level >= 2 ? ' shrink' : ''}`;
     return html`
       <div class="toolbar-wrap">
         <div class=${classes}>
@@ -1827,9 +1827,6 @@ export class ChartExplorerCard extends LitElement {
                 <span>${from} -</span> <span>${to}</span>
               </button>`
             : html`<span class="label placeholder" aria-hidden="true"><span>${from} -</span> <span>${to}</span></span>`}
-          ${show.quickRanges
-            ? html`<div class="quick">${config.quickRanges.map((item) => this._renderButton(item))}</div>`
-            : nothing}
           ${show.presets
             ? html`<button
                 class="with-icon ${activeMenuItem || activePreset ? 'active' : ''}"
@@ -1860,31 +1857,24 @@ export class ChartExplorerCard extends LitElement {
     `;
   }
 
-  private _renderButton(item: RangeItem, inMenu = false) {
+  /** A quick range at the top of the Presets menu, such as "24h". */
+  private _renderButton(item: RangeItem) {
     return html`<button
       class=${this._isActive(item) ? 'active' : ''}
-      role=${inMenu ? 'menuitem' : nothing}
+      role="menuitem"
       @click=${() => this._applySpec(rangeItemSpec(item), true)}
     >
       ${buttonLabel(item)}
     </button>`;
   }
 
-  /**
-   * The quick ranges sit in the Presets menu when the toolbar has no room for
-   * them, and always while the dates are hidden, so their space stays empty.
-   */
-  private _quickInMenu(config: CardConfig): boolean {
-    return config.toolbar.presets && (this._toolbarLevel >= 2 || !config.showRangeLabel);
-  }
-
   private _renderPresetMenu(config: CardConfig) {
     return html`
       <div class="menu" role="menu">
-        ${this._quickInMenu(config) && config.toolbar.quickRanges && config.quickRanges.length
+        ${config.toolbar.quickRanges && config.quickRanges.length
           ? html`<div class="menu-top">
               <div class="section">${t('quick_ranges')}</div>
-              <div class="chips">${config.quickRanges.map((item) => this._renderButton(item, true))}</div>
+              <div class="chips">${config.quickRanges.map((item) => this._renderButton(item))}</div>
             </div>`
           : nothing}
         <div class="menu-list">

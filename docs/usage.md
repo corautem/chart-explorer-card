@@ -11,11 +11,10 @@ One row, at the top or bottom of the card (`toolbar_position`).
 | ‹ › | Moves the window by its own length. Calendar windows move by calendar period (This month goes back to the whole of last month); rolling, custom and zoomed windows move by their exact duration. Stepping forward onto the present makes a rolling window live again. |
 | Now | A window of the same length ending now, or the current period for a calendar preset. |
 | Range label | The window shown, for example `Mon 26 Oct 00:00 - Sun 1 Nov 23:59`. Click it to type a custom range. |
-| 1h 6h 12h 24h 7d 30d 1y | Toolbar buttons: rolling windows ending now, or presets such as Today. Set them with `quick_ranges`. |
-| Presets | Menu entries: by default Today, Yesterday, Tomorrow, This week, Last week, This month, Last month, This year and Last year. Set them with `presets`; lengths show as "Past 6 days". Custom… at the end opens From and To date-and-time fields. |
+| Presets | A menu. At its top, the quick ranges 1h 6h 12h 24h 7d 30d 1y: rolling windows ending now (set them with `quick_ranges`). Below them the menu entries, by default Today, Yesterday, Tomorrow, This week, Last week, This month, Last month, This year and Last year (set them with `presets`; lengths show as "Past 6 days"). Custom… at the end opens From and To date-and-time fields. The button shows the window picked, such as "Past 24 hours" or "Today". |
 | Download | CSV of what is shown, or a PNG image. |
 
-On a narrow card the toolbar stays on one row: first the range label goes onto two lines, then the toolbar buttons move into the Presets menu, then the label is cut short. With the range label turned off, its space stays empty and the toolbar buttons sit at the top of the Presets menu at any width. The menu stays inside the card: the toolbar buttons stay at its top and the entries scroll.
+On a narrow card the toolbar stays on one row: first the range label goes onto two lines, then it is cut short. With the range label turned off, its space stays empty. The menu stays inside the card: the quick ranges stay at its top and the entries scroll.
 
 Weeks start on the day set in your Home Assistant profile (**First day of the week**). With "Auto", the card follows the browser's language settings.
 

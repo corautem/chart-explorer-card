@@ -247,7 +247,7 @@ export class ChartExplorerCardEditor extends LitElement {
           ${this._form.chart_type === 'bar' || this._entities.some((item) => typeof item !== 'string' && item.type === 'bar')
             ? this._group('bars', 'Bars', this._settingsForm(BARS_SCHEMA))
             : nothing}
-          ${this._group('toolbar-buttons', 'Toolbar buttons', this._renderRangeList('quick_ranges'))}
+          ${this._group('toolbar-buttons', 'Quick ranges', this._renderRangeList('quick_ranges'))}
           ${this._group('menu-entries', 'Menu entries', this._renderRangeList('presets'))}
           ${this._group('toolbar', 'Toolbar', this._settingsForm(LAYOUT_SCHEMA))}
         `;
@@ -301,7 +301,7 @@ export class ChartExplorerCardEditor extends LitElement {
     `;
   }
 
-  // ---- Toolbar buttons and menu entries ----
+  // ---- Quick ranges and menu entries ----
 
   private _lists(key: RangeListKey) {
     const unusedKey = key === 'quick_ranges' ? 'unused_quick_ranges' : 'unused_presets';
@@ -381,7 +381,7 @@ export class ChartExplorerCardEditor extends LitElement {
       <div class="range-list" data-list=${key}>
         <div class="list-help">
           ${key === 'quick_ranges'
-            ? 'Buttons in the toolbar, each a rolling window that ends now. Tap one to show or hide it.'
+            ? 'Buttons at the top of the Presets menu, each a rolling window that ends now. Tap one to show or hide it.'
             : 'Entries in the Presets menu, above Custom. Tap one to show or hide it. Next lengths run from now into the future, for forecasts.'}
           Lengths you add appear after these in a different shade; × deletes them.
         </div>

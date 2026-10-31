@@ -660,6 +660,23 @@ try {
     check('bar page loads without errors', errors.length === 0, errors.join(' | '));
     await context.close();
   }
+  {
+    // A US English profile: 12-hour times without a leading zero, weekday before the day on the axis.
+    const { page, context, errors } = await open('?only=1&live=0&delay=50&lang=en-US&width=900');
+    await page.waitForTimeout(1500);
+    const text = await label(page);
+    check('US English: the toolbar writes 12-hour times without a leading zero', /\b([1-9]|1[0-2]):[0-5]\d\s(AM|PM)\b/.test(text) && !/\b0\d:\d\d\s(AM|PM)/.test(text), text);
+    const ticks = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      const option = el._chart.getOption();
+      const formatter = option.xAxis[0].axisLabel.formatter;
+      const midnight = new Date(); midnight.setHours(0, 0, 0, 0);
+      return formatter(midnight.getTime());
+    }, card());
+    check('US English: day labels on the axis put the weekday first', /^[A-Z][a-z]{2} \d{1,2}$/.test(ticks), ticks);
+    check('US English page loads without errors', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
   for (const width of [470, 900]) {
     // The quick ranges live in the Presets menu at any width, with the dates on or off.
     const { page, context, errors } = await open(`?only=1&live=0&delay=50&width=${width}`);

@@ -22,6 +22,26 @@ function hourCycle(timeFormat: TimeFormat | undefined): Intl.DateTimeFormatOptio
   return {};
 }
 
+/** Hours and minutes: "8:05 PM" on a 12-hour clock, "08:05" on a 24-hour one. */
+function clockFormat(lang: string, cycle: Intl.DateTimeFormatOptions, seconds: boolean): Intl.DateTimeFormat {
+  const extra: Intl.DateTimeFormatOptions = seconds ? { second: '2-digit' } : {};
+  const padded = new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit', ...extra, ...cycle });
+  const twelve = ['h11', 'h12'].includes(padded.resolvedOptions().hourCycle ?? '');
+  return twelve ? new Intl.DateTimeFormat(lang, { hour: 'numeric', minute: '2-digit', ...extra, ...cycle }) : padded;
+}
+
+/** Weekday and day of the month, such as "Tue 27". English would otherwise put the day first ("27 Tue"). */
+function weekdayDayFormat(lang: string): (date: Date) => string {
+  const format = new Intl.DateTimeFormat(lang, { weekday: 'short', day: 'numeric' });
+  if (!lang.toLowerCase().startsWith('en')) return (date) => format.format(date);
+  return (date) => {
+    const parts = format.formatToParts(date);
+    const weekday = parts.find((part) => part.type === 'weekday')?.value;
+    const day = parts.find((part) => part.type === 'day')?.value;
+    return weekday && day ? `${weekday} ${day}` : format.format(date);
+  };
+}
+
 /** Labels for the toolbar, the time axis and the cursor, in the device's local time. */
 export class TimeFormatter {
   private readonly weekdayDate: Intl.DateTimeFormat;
@@ -30,7 +50,7 @@ export class TimeFormatter {
   private readonly timeSeconds: Intl.DateTimeFormat;
   private readonly dayMonth: Intl.DateTimeFormat;
   private readonly dayMonthYear: Intl.DateTimeFormat;
-  private readonly weekdayDay: Intl.DateTimeFormat;
+  private readonly weekdayDay: (date: Date) => string;
   private readonly month: Intl.DateTimeFormat;
   private readonly year: Intl.DateTimeFormat;
 
@@ -44,16 +64,11 @@ export class TimeFormatter {
       month: 'short',
       year: 'numeric',
     });
-    this.time = new Intl.DateTimeFormat(lang, { hour: '2-digit', minute: '2-digit', ...cycle });
-    this.timeSeconds = new Intl.DateTimeFormat(lang, {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      ...cycle,
-    });
+    this.time = clockFormat(lang, cycle, false);
+    this.timeSeconds = clockFormat(lang, cycle, true);
     this.dayMonth = new Intl.DateTimeFormat(lang, { day: 'numeric', month: 'short' });
     this.dayMonthYear = new Intl.DateTimeFormat(lang, { day: 'numeric', month: 'short', year: 'numeric' });
-    this.weekdayDay = new Intl.DateTimeFormat(lang, { weekday: 'short', day: 'numeric' });
+    this.weekdayDay = weekdayDayFormat(lang);
     this.month = new Intl.DateTimeFormat(lang, { month: 'short' });
     this.year = new Intl.DateTimeFormat(lang, { year: 'numeric' });
   }
@@ -83,7 +98,7 @@ export class TimeFormatter {
     return `${this.datePart(date, thisYear)} ${time}`;
   }
 
-  /** An hour of the day, such as "06:00", for the heatmap's scale. */
+  /** An hour of the day, such as "06:00" or "6:00 AM", for the heatmap's scale. */
   hourLabel(hour: number): string {
     return this.time.format(new Date(2026, 0, 1, hour, 0, 0));
   }
@@ -98,7 +113,7 @@ export class TimeFormatter {
       return date.getMonth() === 0 ? this.year.format(date) : this.month.format(date);
     }
     if (windowLength > 400 * DAY) return this.dayMonthYear.format(date);
-    return windowLength > 10 * DAY ? this.dayMonth.format(date) : this.weekdayDay.format(date);
+    return windowLength > 10 * DAY ? this.dayMonth.format(date) : this.weekdayDay(date);
   }
 
   private datePart(date: Date, thisYear: number): string {

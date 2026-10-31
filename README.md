@@ -76,6 +76,7 @@ The editor saves only what differs from the defaults, so the YAML stays short. E
 - **Toolbar:** ‹ › move the window by its own length, Now returns to the present, the Presets menu picks a window (quick ranges at its top), the dates open a custom range, and the download button saves a CSV or PNG.
 - **Moving and zooming:** drag sideways to move through time; pinch, or hold Ctrl and use the mouse wheel, to zoom; hold Shift and drag to zoom into a part; double-click or double-tap to go back.
 - **Values:** hover over or tap the chart to see the readings at that moment; tap a value for the entity's details; tap a name to fade the entity and leave it out of the CSV.
+- **Your formats:** dates, times and numbers follow your Home Assistant profile (language, 12- or 24-hour clock, number format, first day of the week), in your device's time zone.
 
 ![The Presets menu open: quick ranges at the top, then Today, Yesterday and the other entries, and Custom at the end](docs/images/presets-menu.png)
 

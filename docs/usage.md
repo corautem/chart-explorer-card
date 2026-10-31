@@ -48,6 +48,25 @@ Each entity shows its value in its line's colour, with its name underneath (or a
 - On touch screens a vertical swipe still scrolls the dashboard.
 - Pies have no time axis, so dragging and zooming do nothing there; the toolbar picks their window.
 
+## Dates, times and numbers
+
+The card follows the settings in your Home Assistant profile:
+
+- **Language:** the date style and the names of months and weekdays.
+- **Time format:** a 12- or 24-hour clock, set directly or following the language or the device.
+- **Number format:** the decimal mark and the thousands separator.
+- **First day of the week:** where weeks start, for This week, Last week and weekly bars.
+
+Times are shown in the device's own time zone, so someone in New York sees New York times wherever Home Assistant runs. The card writes month names, so the profile's separate date format setting does not apply, and it does not use the profile's option to show the server's time zone.
+
+| Profile | Toolbar | Time axis | Numbers |
+|---|---|---|---|
+| English (US) | Tue, Oct 27 8:05 PM | Tue 27, 6:00 AM | 1,234.5 |
+| English (UK) | Tue 27 Oct 20:05 | Tue 27, 06:00 | 1,234.5 |
+| German | Di., 27. Okt. 20:05 | Di., 27., 06:00 | 1.234,5 |
+
+The CSV always writes times as `YYYY-MM-DD HH:mm:ss` on a 24-hour clock, so spreadsheets read them the same everywhere; `csv_separator` and `csv_decimal` set its separator and decimal mark.
+
 ## Loading
 
 A thin bar runs along the top of the chart while data loads, and the old lines stay visible but dimmed. After 3 seconds the chart also says "Loading…". If loading fails, a message with a Retry button appears.

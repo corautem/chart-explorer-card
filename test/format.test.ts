@@ -36,7 +36,22 @@ describe('range label', () => {
   it('follows a 12-hour setting', () => {
     const twelve = new TimeFormatter('en-GB', '12');
     const w = { start: local(2026, 10, 30, 13), end: local(2026, 10, 30, 15) };
-    expect(twelve.rangeLabel(w, false, now)).toMatch(/^Fri 30 Oct 01:00\s?pm - 03:00\s?pm$/i);
+    expect(twelve.rangeLabel(w, false, now)).toMatch(/^Fri 30 Oct 1:00\s?pm - 3:00\s?pm$/i);
+  });
+
+  it('writes US English the American way', () => {
+    const us = new TimeFormatter('en', 'language');
+    const w = { start: local(2026, 10, 27, 20, 5), end: local(2026, 10, 28, 8) };
+    // A 12-hour clock without a leading zero, and the weekday before the day on the axis.
+    expect(us.rangeLabel(w, false, now)).toMatch(/^Tue, Oct 27 8:05\sPM - Wed, Oct 28 8:00\sAM$/);
+    expect(us.hourLabel(6)).toMatch(/^6:00\sAM$/);
+    expect(us.axisLabel(local(2026, 10, 27), 24 * 3_600_000)).toBe('Tue 27');
+    expect(us.cursorLabel(local(2026, 10, 27, 20, 5, 9), 3_600_000, false)).toMatch(/^Tue, Oct 27 8:05:09\sPM$/);
+  });
+
+  it('keeps the leading zero on a 24-hour clock and other languages as they are', () => {
+    expect(new TimeFormatter('en', '24').hourLabel(6)).toBe('06:00');
+    expect(new TimeFormatter('de', 'language').axisLabel(local(2026, 10, 27), 24 * 3_600_000)).toBe('Di., 27.');
   });
 
   it('labels midnight ticks with dates and others with times', () => {

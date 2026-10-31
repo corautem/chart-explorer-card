@@ -36,14 +36,14 @@ A picture and an example for each: [Chart types](docs/chart-types.md).
 ### HACS
 
 1. In Home Assistant, open **HACS**, then the three-dot menu → **Custom repositories**.
-2. Paste the address of this repository, choose the type **Dashboard**, and select **Add**.
+2. Paste `https://github.com/corautem/chart-explorer-card`, choose the type **Dashboard**, and select **Add**.
 3. Find **Chart Explorer Card** in HACS, open it and select **Download**. HACS adds the resource entry.
 4. Reload the browser.
 
 <details>
 <summary><b>By hand</b></summary>
 
-1. Download both files from the latest release on the **Releases** page of this repository: `chart-explorer-card.js` (the card) and `chart-explorer-card-editor.js` (the visual editor, loaded only when you edit a card).
+1. Download both files from the [latest release](https://github.com/corautem/chart-explorer-card/releases/latest): `chart-explorer-card.js` (the card) and `chart-explorer-card-editor.js` (the visual editor, loaded only when you edit a card).
 2. Copy them into your Home Assistant configuration folder, in `/config/www/chart-explorer-card/`.
 3. In Home Assistant, open **Settings → Dashboards**, then the three-dot menu → **Resources** → **Add resource**. (The Resources entry appears only with **Advanced mode** on in your user profile.)
    - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.6.2`
@@ -164,7 +164,7 @@ entities:
 
 ## Support
 
-I build Chart Explorer Card in my spare time. If it's useful to you, a star on GitHub (the Star button at the top of the repository page) helps other people find it. If you'd like to support the work, you can do so on [Ko-fi](https://ko-fi.com/corautem) or through the Sponsor button on the repository page. Bug reports and ideas are welcome in the issues.
+I build Chart Explorer Card in my spare time. If it's useful to you, a star on GitHub (the Star button at the top of the repository page) helps other people find it. If you'd like to support the work, you can do so through [GitHub Sponsors](https://github.com/sponsors/corautem) or on [Ko-fi](https://ko-fi.com/corautem). Bug reports and ideas are welcome in the issues.
 
 ## Licence
 

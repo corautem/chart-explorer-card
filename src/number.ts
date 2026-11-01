@@ -28,6 +28,8 @@ export class NumberFormatter {
 
   /** Formats with a fixed number of decimals, or up to two when `decimals` is unknown. */
   format(value: number, decimals?: number): string {
+    // A value that rounds to zero is written 0, never -0.
+    if (Math.abs(value) < 0.5 * 10 ** -(decimals ?? 2)) value = 0;
     const key = decimals === undefined ? 'auto' : String(decimals);
     let formatter = this.cache.get(key);
     if (!formatter) {
@@ -43,6 +45,7 @@ export class NumberFormatter {
 
   /** Short axis labels: 950, 1.2K, 3.4M. */
   compact(value: number): string {
+    if (Math.abs(value) < 0.05) value = 0;
     let formatter = this.cache.get('compact');
     if (!formatter) {
       formatter = this.create({ notation: 'compact', maximumFractionDigits: 1 });

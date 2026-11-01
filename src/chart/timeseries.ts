@@ -23,8 +23,8 @@ export interface PlotSeries {
   data: { t: number[]; v: number[] };
   /** Lines with the same stack id pile up as areas; their points share timestamps. */
   stack?: string;
-  /** A shaded range behind the line, low to high, at the same timestamps as `data`. */
-  band?: { low: number[]; high: number[] };
+  /** A shaded range behind the line, between two values at the same timestamps as `data`. */
+  band?: { low: number[]; high: number[]; opacity: number };
 }
 
 /** One entity's bars, already placed: each bar spans start to end in time and low to high in value. */
@@ -494,14 +494,14 @@ interface CustomApi {
 }
 
 /**
- * The shaded range behind a line, drawn as one polygon per unbroken run so
- * neighbouring slots show no seams. Its data carries the low and high values,
- * so the scale makes room for them.
+ * The shaded range between a line and another value, drawn as one polygon per
+ * unbroken run so neighbouring slots show no seams. Its data carries both
+ * values, so the scale makes room for them.
  */
 function rangeSeries(s: PlotSeries, input: PlotInput): Record<string, unknown> {
   const band = s.band as NonNullable<PlotSeries['band']>;
   const { t } = s.data;
-  const fill = withAlpha(s.color, s.faded ? 0.18 * input.fadedOpacity : 0.18);
+  const fill = withAlpha(s.color, s.faded ? band.opacity * input.fadedOpacity : band.opacity);
   const step = s.curve === 'step';
   const runs: number[][] = [];
   let run: number[] = [];
@@ -663,8 +663,10 @@ export function paddedBounds(
   zero: boolean,
 ): { min: (e: Extent) => number; max: (e: Extent) => number } {
   const span = (e: Extent) => e.max - e.min || Math.abs(e.max) || 1;
+  // A flat line at zero, such as solar power at night, gets a scale from 0 to 1, not a sliver around zero.
+  const flatZero = (e: Extent) => e.max === 0 && e.min === 0;
   return {
-    max: (e) => (zero && e.max <= 0 ? 0 : e.max + span(e) * pad.top),
-    min: (e) => (zero && e.min >= 0 ? 0 : e.min - span(e) * pad.bottom),
+    max: (e) => (flatZero(e) ? 1 : zero && e.max <= 0 ? 0 : e.max + span(e) * pad.top),
+    min: (e) => (flatZero(e) ? 0 : zero && e.min >= 0 ? 0 : e.min - span(e) * pad.bottom),
   };
 }

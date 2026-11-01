@@ -63,6 +63,17 @@ export function withAlpha(color: string, alpha: number): string {
   return rgb ? `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})` : color;
 }
 
+/**
+ * The default colour of an entity's second, third... value: its own colour
+ * moved towards grey, a third of the way for each step, so they read as one family.
+ */
+export function shadeColor(color: string, step: number): string {
+  const rgb = toRgb(color);
+  if (!rgb || step <= 0) return color;
+  const k = Math.min(0.75, step / 3);
+  return toHex(rgb.map((c) => c + (158 - c) * k));
+}
+
 export function toHex(rgb: readonly number[]): string {
   return `#${rgb.map((n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')).join('')}`;
 }

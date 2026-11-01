@@ -25,13 +25,29 @@ export interface Space {
   ms?: number;
 }
 
+/** One value drawn from each item of an attribute's list, such as pv_estimate10. */
+export interface AttributeValueInput {
+  key: string;
+  name?: string;
+  color?: string;
+  line_style?: LineStyle;
+  curve?: Curve;
+  width?: number;
+  /** `zero` fills down to zero; another key fills up to that value, a shaded range. */
+  fill?: boolean | string;
+  fill_opacity?: number;
+  show_in_header?: boolean;
+}
+
 /**
- * A list kept in an attribute, such as a forecast: each item has a time and a
- * value, and optionally a low and a high value for a shaded range.
+ * A list kept in an attribute, such as a forecast: each item has a time and
+ * values. `values` picks the ones to draw; the older `value`, `low` and `high`
+ * still work and mean one value with a shaded range from low to high.
  */
 export interface AttributeSourceInput {
   name: string;
   time?: string;
+  values?: AttributeValueInput[];
   value?: string;
   low?: string;
   high?: string;
@@ -137,13 +153,12 @@ export interface CardConfigInput {
   y_axes?: YAxisInput[];
 }
 
+/** Where one row's line comes from: a key in each item of an attribute's list. */
 export interface AttributeSource {
   name: string;
   /** Keys in each item; without them the time and value keys are found automatically. */
   time?: string;
   value?: string;
-  low?: string;
-  high?: string;
 }
 
 export interface EntityConfig {
@@ -152,6 +167,12 @@ export interface EntityConfig {
   index: number;
   entity: string;
   attribute?: AttributeSource;
+  /** For a value from an attribute: the key whose value the fill reaches up to, a shaded range. */
+  fillTo?: string;
+  /** For the second and later values of one entity: how far their default colour moves towards grey. */
+  shade?: number;
+  /** The entity's own colour, which its values' default colours start from. */
+  baseColor?: string;
   name?: string;
   color?: string;
   unit?: string;
@@ -269,7 +290,7 @@ export function normalizeConfig(input: unknown): CardConfig {
 
   return {
     title: c.title === undefined || c.title === null ? undefined : String(c.title),
-    entities: c.entities.map(normalizeEntity),
+    entities: c.entities.flatMap(normalizeEntity),
     chartType: oneOf(c.chart_type, 'chart_type', CHART_TYPES, 'line'),
     stacked: bool(c.stacked, 'stacked', false),
     period: oneOf(c.period, 'period', ['auto', 'hour', 'day', 'week', 'month'], 'auto'),
@@ -343,8 +364,59 @@ export function normalizeConfig(input: unknown): CardConfig {
   };
 }
 
-function normalizeEntity(raw: string | EntityConfigInput, index: number): EntityConfig {
+/**
+ * One row per line. An entity drawing several values from an attribute
+ * becomes one row per value, so each fades, shows its value and exports on its own.
+ */
+function normalizeEntity(raw: string | EntityConfigInput, index: number): EntityConfig[] {
   const e: EntityConfigInput = typeof raw === 'string' ? { entity: raw } : raw;
+  const row = normalizeRow(e, index);
+  const source = attributeSource(e?.attribute, `Entity ${index + 1} attribute`);
+  if (!source) return [row];
+  const plain = { name: source.name, time: source.time };
+  const values = source.values ?? legacyValues(source, e);
+  return values.map((value, k) => ({
+    ...row,
+    key: source.values ? `${index}:${e.entity}#${k}` : k === 0 ? row.key : `${index}:${e.entity}#range`,
+    attribute: { ...plain, value: value.key },
+    name: value.name ?? (values.length === 1 || !source.values ? row.name : value.key),
+    color: value.color ?? (k === 0 ? row.color : undefined),
+    baseColor: row.color,
+    shade: source.values ? k : 0,
+    lineStyle: value.line_style === undefined ? undefined : oneOf(value.line_style, `Entity ${index + 1} value ${value.key} line_style`, LINE_STYLES, 'solid'),
+    curve: value.curve === undefined ? row.curve : oneOf(value.curve, `Entity ${index + 1} value ${value.key} curve`, CURVES, 'smooth'),
+    width: value.width === undefined ? row.width : positiveNumber(value.width, `Entity ${index + 1} value ${value.key} width`, 2),
+    fill: value.fill === true || value.fill === 'zero',
+    fillTo: typeof value.fill === 'string' && value.fill !== 'zero' && value.fill !== 'none' ? value.fill : undefined,
+    fillOpacity: fillOpacity(value.fill_opacity, `Entity ${index + 1} value ${value.key} fill_opacity`),
+    showInHeader: value.show_in_header ?? row.showInHeader,
+  }));
+}
+
+/**
+ * The older form as a values list: one value with the entity's own line and
+ * fill settings, and with `low` and `high` a hidden value that fills from
+ * high down to low in the same colour.
+ */
+export function legacyValues(source: { value?: string; low?: string; high?: string }, e: EntityConfigInput): AttributeValueInput[] {
+  const values: AttributeValueInput[] = [
+    { key: source.value as string, line_style: e.line_style, fill: e.fill, fill_opacity: e.fill_opacity },
+  ];
+  if (source.low && source.high) {
+    values.push({
+      key: source.high,
+      name: e.name ? `${e.name} high` : source.high,
+      color: e.color,
+      line_style: 'none',
+      fill: source.low,
+      fill_opacity: 0.18,
+      show_in_header: false,
+    });
+  }
+  return values;
+}
+
+function normalizeRow(e: EntityConfigInput, index: number): EntityConfig {
   const where = `Entity ${index + 1}`;
   if (!e || typeof e.entity !== 'string' || !ENTITY_ID.test(e.entity)) {
     throw new Error(`${where}: "entity" must be an entity ID such as sensor.outdoor_temperature.`);
@@ -354,7 +426,6 @@ function normalizeEntity(raw: string | EntityConfigInput, index: number): Entity
     key: `${index}:${e.entity}`,
     index,
     entity: e.entity,
-    attribute: attributeSource(e.attribute, `${where} attribute`),
     name: e.name === undefined ? undefined : String(e.name),
     color: e.color === undefined ? undefined : String(e.color),
     unit: e.unit === undefined ? undefined : String(e.unit),
@@ -383,15 +454,32 @@ function fillOpacity(value: unknown, name: string): number | undefined {
   return amount;
 }
 
-function attributeSource(value: unknown, name: string): AttributeSource | undefined {
+interface ParsedAttribute {
+  name: string;
+  time?: string;
+  values?: AttributeValueInput[];
+  value?: string;
+  low?: string;
+  high?: string;
+}
+
+function attributeSource(value: unknown, name: string): ParsedAttribute | undefined {
   if (value === undefined || value === null || value === '') return undefined;
   if (typeof value === 'string') return { name: value };
   if (typeof value !== 'object' || Array.isArray(value) || !(value as AttributeSourceInput).name) {
-    throw new Error(`${name} must be an attribute name, or { name, time, value, low, high } with the keys in each item.`);
+    throw new Error(`${name} must be an attribute name, or { name, time, values } with the keys in each item.`);
   }
   const input = value as AttributeSourceInput;
   const key = (text: unknown) => (text === undefined || text === null || text === '' ? undefined : String(text));
-  return { name: String(input.name), time: key(input.time), value: key(input.value), low: key(input.low), high: key(input.high) };
+  let values: AttributeValueInput[] | undefined;
+  if (input.values !== undefined) {
+    if (!Array.isArray(input.values) || !input.values.every((item) => item && typeof item === 'object' && key(item.key))) {
+      throw new Error(`${name} values must be a list of { key: ... } entries, one for each value to draw.`);
+    }
+    // An empty list draws nothing: every value was switched off.
+    values = input.values.map((item) => ({ ...item, key: String(item.key) }));
+  }
+  return { name: String(input.name), time: key(input.time), values, value: key(input.value), low: key(input.low), high: key(input.high) };
 }
 
 function stateColors(value: unknown, name: string): Record<string, string> {

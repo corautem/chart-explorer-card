@@ -70,12 +70,13 @@ const solar = (t: number) => {
   const clouds = 0.75 + 0.25 * noise(Math.floor(t / (40 * MINUTE)), 21) + 0.08 * noise(Math.floor(t / MINUTE), 22);
   return Math.max(0, clearSky(t) * clouds);
 };
-/** A Solcast-style forecast: half-hour slots for today and tomorrow, with low and high estimates. */
+/** A Solcast-style forecast: half-hour slots from yesterday to tomorrow, with low and high estimates. */
 const forecastSlots = (now: number) => {
   const start = new Date(now);
   start.setHours(0, 0, 0, 0);
+  start.setDate(start.getDate() - 1);
   const slots: Record<string, unknown>[] = [];
-  for (let k = 0; k < 96; k++) {
+  for (let k = 0; k < 144; k++) {
     const at = start.getTime() + k * 30 * MINUTE;
     const estimate = clearSky(at + 15 * MINUTE) * (0.72 + 0.1 * noise(Math.floor(at / DAY), 23));
     const round = (value: number) => Math.round(value * 100) / 100;
@@ -193,7 +194,7 @@ export const ENTITIES: FakeEntity[] = [
     interval: 30 * MINUTE,
     precision: 2,
     value: (t) => {
-      const slots = forecastSlots(t).slice(0, 48);
+      const slots = forecastSlots(t).slice(48, 96);
       return slots.reduce((sum, slot) => sum + (slot.pv_estimate as number) / 2, 0);
     },
     extra: (now) => ({ detailedForecast: forecastSlots(now) }),

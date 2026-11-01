@@ -678,7 +678,7 @@ try {
     await context.close();
   }
   {
-    // A forecast read from an attribute: a line into the future, a shaded range, no history request.
+    // A forecast read from an attribute: values drawn into the future, a shaded range, no history request.
     const { page, context, errors } = await open('?only=11&live=0&delay=50');
     await page.waitForTimeout(1500);
     await page.screenshot({ path: `${OUT}/solar-forecast.png` });
@@ -696,12 +696,13 @@ try {
           .flatMap((m) => m.entity_ids ?? m.statistic_ids ?? []),
       };
     }, card());
-    check('a list from an attribute draws as a line', info.points >= 40, String(info.points));
+    check('a value from an attribute list draws as a line', info.points >= 40, String(info.points));
     check('the list runs past the present', info.future);
-    check('a low and a high value draw a shaded range', info.range);
+    check('a value filled up to another draws a shaded range', info.range);
     check('the forecast needs no history request', !info.historyFor.includes('sensor.demo_pv_forecast'), info.historyFor.join(' '));
-    const unit = await page.locator(`${card()} .item .value`).nth(1).innerText();
-    check('the forecast value shows the unit set on the row', /kW$/.test(unit.trim()) && !/kWh/.test(unit), unit);
+    const items = (await page.locator(`${card()} .item .value`).allInnerTexts()).map((v) => v.trim());
+    check('a value hidden from the values row stays off it', items.length === 2, items.join(' | '));
+    check('the list suggests kW from the sensor\'s kWh', /kW$/.test(items[1]) && !/kWh/.test(items[1]), items[1]);
     await page.locator(`${card()} .with-icon`).click();
     await page.locator(`${card()} .menu .menu-list button`, { hasText: 'Tomorrow' }).click();
     await page.waitForTimeout(800);
@@ -712,12 +713,45 @@ try {
     check('hovering tomorrow shows the forecast, and no measurement', values[0].startsWith('-') && Number.parseFloat(values[1]) > 0, values.join(' | '));
     await page.mouse.move(box.x + box.width * 0.5, box.y - 120);
     const lines = await download(page, 1, 'CSV');
-    check('CSV lists the forecast with its low and high values', /Forecast \(kW\),Forecast low \(kW\),Forecast high \(kW\)/.test(lines[0]), lines[0]);
+    check('CSV has a column for each value drawn', /Forecast \(kW\),Forecast 90% \(kW\)/.test(lines[0]), lines[0]);
+    // The older form from 0.8.0 still draws its value and range.
+    await page.evaluate((sel) => {
+      document.querySelector(sel).setConfig({
+        type: 'custom:chart-explorer-card',
+        default_range: 'today',
+        entities: [{ entity: 'sensor.demo_pv_forecast', name: 'Forecast', unit: 'kW', attribute: { name: 'detailedForecast', value: 'pv_estimate', low: 'pv_estimate10', high: 'pv_estimate90' } }],
+      });
+    }, card());
+    await page.waitForTimeout(800);
+    const legacy = await page.evaluate((sel) => {
+      const series = document.querySelector(sel)._chart.getOption().series;
+      return { lines: series.filter((s) => s.type === 'line' && String(s.id).includes('pv_forecast')).length, range: series.some((s) => String(s.id).endsWith(':range')) };
+    }, card());
+    check('the older value, low and high form still draws its value and range', legacy.lines >= 1 && legacy.range, JSON.stringify(legacy));
+    // W and kW on one scale: the W sensor is drawn in kW, and its value keeps W.
+    await page.evaluate((sel) => {
+      document.querySelector(sel).setConfig({
+        type: 'custom:chart-explorer-card',
+        default_range: '24h',
+        entities: [{ entity: 'sensor.demo_solar_power', name: 'Solar' }, { entity: 'sensor.demo_house_power', name: 'House' }],
+      });
+    }, card());
+    await page.waitForTimeout(1500);
+    const scale = await page.evaluate((sel) => {
+      const option = document.querySelector(sel)._chart.getOption();
+      const house = option.series.find((s) => s.name === 'House');
+      const max = Math.max(...house.data.map((p) => p[1] ?? 0));
+      return { scales: option.yAxis.filter((a) => a.show !== false).length, houseAxis: house.yAxisIndex, max };
+    }, card());
+    const houseValue = (await page.locator(`${card()} .item .value`).nth(1).innerText()).trim();
+    check('W and kW share one scale', scale.scales === 1 && scale.houseAxis === 0, JSON.stringify(scale));
+    check('the W sensor is drawn in kW', scale.max > 0 && scale.max < 5, String(scale.max));
+    check('the W sensor\'s value keeps its own unit', /W$/.test(houseValue) && !/kW$/.test(houseValue), houseValue);
     check('forecast page loads without errors', errors.length === 0, errors.join(' | '));
     await context.close();
   }
   {
-    // Your style: the forecast as see-through areas, without lines.
+    // The forecast as see-through areas, without lines.
     const { page, context, errors } = await open('?only=12&live=0&delay=50');
     await page.waitForTimeout(1500);
     const looks = await page.evaluate((sel) => {
@@ -730,8 +764,8 @@ try {
     await context.close();
   }
   {
-    // The editor: draw from an attribute, with key pickers filled from the list's items.
-    const { page, context, errors } = await open('?editor=1&only=11&live=0&delay=50', { width: 1400, height: 1400 });
+    // The editor: the list's numbers, each switched on with its own colour, line type and fill.
+    const { page, context, errors } = await open('?editor=1&only=11&live=0&delay=50', { width: 1400, height: 1600 });
     await page.waitForTimeout(1200);
     const ed = 'chart-explorer-card-editor';
     await page.locator(`${ed} .row .row-text`).nth(1).click();
@@ -739,10 +773,24 @@ try {
     const fields = await page.evaluate((sel) => {
       const root = document.querySelector(sel).shadowRoot;
       const has = (name) => Boolean(root.querySelector(`[data-field="${name}"]`));
-      return { source: has('attribute_name'), value: has('attribute_value'), low: has('attribute_low'), type: has('type'), statistic: has('statistic'), opacity: has('fill_opacity') };
+      return {
+        section: Boolean(root.querySelector('.group[data-group="attribute-values"] .group-body')),
+        switches: ['pv_estimate', 'pv_estimate10', 'pv_estimate90'].map((key) => has(`on:${key}`)),
+        colour: has('color:pv_estimate'),
+        offColour: has('color:pv_estimate10'),
+        lineOnMain: has('line_style'),
+        type: has('type'),
+      };
     }, ed);
-    check('the editor offers drawing from an attribute, with its keys', fields.source && fields.value && fields.low, JSON.stringify(fields));
-    check('settings that do not apply to a list are hidden', !fields.type && !fields.statistic, JSON.stringify(fields));
+    check('the Values to draw section lists the numbers in the items', fields.section && fields.switches.every(Boolean), JSON.stringify(fields));
+    check('a switched-on value has its own colour; a switched-off one shows none', fields.colour && !fields.offColour, JSON.stringify(fields));
+    check('line type and fill move from the main form to each value', !fields.lineOnMain && !fields.type, JSON.stringify(fields));
+    await page.locator(`${ed} [data-field="on:pv_estimate10"]`).click();
+    await page.waitForTimeout(400);
+    const savedValues = JSON.parse((await page.locator('#saved-config').textContent()) || '{}').entities?.[1]?.attribute?.values ?? [];
+    check('switching a value on adds it to the saved values', savedValues.map((v) => v.key).join(',') === 'pv_estimate,pv_estimate10,pv_estimate90', JSON.stringify(savedValues));
+    const added = await page.evaluate((sel) => Boolean(document.querySelector(sel).shadowRoot.querySelector('[data-field="color:pv_estimate10"]')), ed);
+    check('the switched-on value shows its colour, line type and fill', added);
     check('editor forecast page loads without errors', errors.length === 0, errors.join(' | '));
     await context.close();
   }

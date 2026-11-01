@@ -1,8 +1,15 @@
 // Form definitions for the visual editor, and the conversion between the card
 // config and the flat form data that Home Assistant's ha-form edits.
 
-import { DEFAULT_QUICK_RANGES, type CardConfigInput, type EntityConfigInput } from '../config';
-import { toHex, toRgb } from '../chart/theme';
+import {
+  DEFAULT_QUICK_RANGES,
+  legacyValues,
+  type AttributeSourceInput,
+  type AttributeValueInput,
+  type CardConfigInput,
+  type EntityConfigInput,
+} from '../config';
+import { shadeColor, toHex, toRgb } from '../chart/theme';
 import { menuLabel } from '../localize';
 import { PRESET_IDS, parseRangeItem, rangeItemId, sortRangeItems, type RangeItem } from '../time/range';
 
@@ -278,9 +285,6 @@ export function entityToForm(item: EntityItem, defaultColor: string): FormData {
     attribute: undefined,
     attribute_name: source?.name ?? '',
     attribute_time: source?.time ?? 'auto',
-    attribute_value: source?.value ?? 'auto',
-    attribute_low: source?.low ?? 'none',
-    attribute_high: source?.high ?? 'none',
     fill_opacity: e.fill_opacity === undefined ? undefined : Math.round(e.fill_opacity * 100),
     color: toRgb(e.color ?? defaultColor) ?? toRgb(defaultColor),
     line_style: e.line_style ?? 'auto',
@@ -296,12 +300,13 @@ export function entityFromForm(form: FormData, original: EntityItem, defaultColo
   const base: Record<string, unknown> = typeof original === 'string' ? {} : { ...original };
   const out: Record<string, unknown> = { entity: String(form.entity ?? entityId(original)) };
   if (typeof form.attribute_name === 'string' && form.attribute_name) {
-    const keys: Record<string, string> = {};
-    if (form.attribute_time && form.attribute_time !== 'auto') keys.time = String(form.attribute_time);
-    if (form.attribute_value && form.attribute_value !== 'auto') keys.value = String(form.attribute_value);
-    if (form.attribute_low && form.attribute_low !== 'none') keys.low = String(form.attribute_low);
-    if (form.attribute_high && form.attribute_high !== 'none') keys.high = String(form.attribute_high);
-    out.attribute = Object.keys(keys).length ? { name: form.attribute_name, ...keys } : form.attribute_name;
+    // The values to draw are edited in their own section; a different attribute starts afresh.
+    const before = base.attribute;
+    const previous: AttributeSourceInput | undefined = typeof before === 'string' ? { name: before } : (before as AttributeSourceInput | undefined);
+    const next: AttributeSourceInput = previous?.name === form.attribute_name ? { ...previous } : { name: form.attribute_name };
+    if (form.attribute_time && form.attribute_time !== 'auto') next.time = String(form.attribute_time);
+    else delete next.time;
+    out.attribute = Object.keys(next).length === 1 ? next.name : next;
   }
   if (form.type && form.type !== 'auto' && !out.attribute) out.type = form.type;
   if (typeof form.name === 'string' && form.name.trim()) out.name = form.name;
@@ -397,9 +402,6 @@ export const LABELS: Record<string, string> = {
   fill_opacity: 'Fill opacity',
   attribute_name: 'Draw from',
   attribute_time: 'Time in each item',
-  attribute_value: 'Value in each item',
-  attribute_low: 'Low value (shaded range)',
-  attribute_high: 'High value (shaded range)',
   unit: 'Unit',
   decimals: 'Decimal places',
   y_axis: 'Scale (y-axis)',
@@ -455,14 +457,13 @@ export const HELPERS: Record<string, string> = {
   csv_separator: 'Comma suits most programs; Excel set up for European formats expects a semicolon.',
   csv_decimal: 'Use a comma with the semicolon separator for European Excel.',
   csv_fill: 'Blank keeps only the recorded points. Repeat fills each empty cell with that entity\'s last value, which suits Excel charts and formulas.',
-  unit: 'Leave empty to use the entity unit. A list from an attribute has no unit unless you set one, such as kW.',
+  unit: 'Leave empty to use the entity unit. For a list from an attribute it starts as kW when the entity reports kWh (forecast slots hold power), and otherwise has none.',
   show_unit: 'The unit, such as °C, after the value above the chart and in the tooltip.',
   decimals: 'Leave empty to use the entity display precision; a list from an attribute then shows up to two decimal places.',
   line_style: 'Automatic is a solid line; from the ninth entity on, lines are dashed so colours can repeat. None leaves only the fill or the shaded range.',
   fill_opacity: 'Leave empty for a fill that fades downwards; a percentage gives an even fill at that opacity.',
   attribute_name: 'The recorded history, or a list kept in one of the entity\'s attributes, such as a solar forecast or electricity prices. A list is drawn as it is now, including times still to come.',
-  attribute_value: 'Automatic picks the only number in each item. Lists with several numbers, such as forecast estimates, need one chosen here.',
-  attribute_low: 'With a low and a high value, a shaded range is drawn behind the line, such as pv_estimate10 to pv_estimate90.',
+  attribute_time: 'The key holding each item\'s time. It is found automatically when it is called period_start, start, datetime, time and the like.',
   y_axis: 'Entities with different units cannot share one scale: 1,500 W would squash a 20 °C line flat. Automatic puts the first unit on the left-hand scale and the second on the right-hand scale. Choose Left or Right to put this entity on that scale yourself.',
   statistic: 'For every entity: windows longer than 24 hours keep one point per 5 minutes, hour or day, with its average, lowest and highest value. Highest keeps short peaks visible; lowest shows the dips. Energy and water meters always show their reading. An entity can choose differently in its own Advanced section.',
 };
@@ -665,11 +666,129 @@ const KIND_NAMES: Record<string, string> = { line: 'line', bar: 'bars', timeline
  * `autoKind` is what Automatic means for this entity; `states` are its known
  * states, offered for bands.
  */
-/** The entity's attributes that hold lists, and the keys of the chosen list's items. */
+/** The entity's attributes that hold lists, and what the editor needs to know about the chosen one. */
 export interface ListSource {
   attributes: string[];
+  /** All keys of the chosen list's items, for the time picker. */
   keys: string[];
   chosen: string;
+  /** False when the time key could not be found automatically, so it must be picked. */
+  showTime?: boolean;
+}
+
+// ---- Values drawn from an attribute's list ----
+
+const VALUE_FIELDS = ['on', 'name', 'color', 'line', 'fill', 'opacity', 'show'] as const;
+
+/** The default colour of the k-th value drawn: the entity's colour, then shades of it towards grey. */
+export function valueColor(entityColor: string, k: number): string {
+  return k === 0 ? entityColor : shadeColor(entityColor, k);
+}
+
+/**
+ * The values an entity draws from its attribute, as a values list. The older
+ * forms become one: an attribute name alone draws the automatic value, and
+ * `value`, `low` and `high` a value with a shaded range.
+ */
+export function attributeValues(e: EntityConfigInput, automatic?: string): AttributeValueInput[] {
+  const source = typeof e.attribute === 'string' ? { name: e.attribute } : e.attribute;
+  if (!source) return [];
+  if (source.values?.length) return source.values;
+  const values = legacyValues(source, e);
+  if (!values[0].key) {
+    if (!automatic) return values.slice(1);
+    values[0] = { ...values[0], key: automatic };
+  }
+  return values;
+}
+
+/** Form data for the values section: for each number in the items, whether it is drawn and how. */
+export function valuesToForm(values: AttributeValueInput[], keys: string[], entityColor: string): FormData {
+  const form: FormData = {};
+  for (const key of keys) {
+    const k = values.findIndex((value) => value.key === key);
+    const value = values[k];
+    form[`on:${key}`] = Boolean(value);
+    if (!value) continue;
+    form[`name:${key}`] = value.name ?? '';
+    form[`color:${key}`] = toRgb(value.color ?? valueColor(entityColor, k));
+    form[`line:${key}`] = value.line_style ?? 'solid';
+    form[`fill:${key}`] = value.fill === true ? 'zero' : typeof value.fill === 'string' ? value.fill : 'none';
+    form[`opacity:${key}`] = value.fill_opacity === undefined ? undefined : Math.round(value.fill_opacity * 100);
+    form[`show:${key}`] = value.show_in_header ?? true;
+  }
+  return form;
+}
+
+/** The values list from the section's form data, saving only what differs from the defaults. */
+export function valuesFromForm(form: FormData, keys: string[], previous: AttributeValueInput[], entityColor: string): AttributeValueInput[] {
+  const out: AttributeValueInput[] = [];
+  for (const key of keys) {
+    if (!form[`on:${key}`]) continue;
+    const before = previous.find((value) => value.key === key);
+    const value: AttributeValueInput = { key };
+    const name = form[`name:${key}`];
+    if (typeof name === 'string' && name.trim()) value.name = name;
+    const rgb = form[`color:${key}`];
+    if (Array.isArray(rgb)) {
+      const hex = toHex(rgb as number[]);
+      if (hex !== toHex(toRgb(valueColor(entityColor, out.length)) ?? [0, 0, 0])) value.color = hex;
+    }
+    const line = form[`line:${key}`];
+    if (line && line !== 'solid') value.line_style = line as AttributeValueInput['line_style'];
+    if (before?.curve) value.curve = before.curve;
+    if (before?.width) value.width = before.width;
+    const fill = form[`fill:${key}`];
+    if (fill && fill !== 'none') {
+      value.fill = String(fill);
+      const opacity = form[`opacity:${key}`];
+      if (typeof opacity === 'number' && Number.isFinite(opacity)) value.fill_opacity = Math.min(100, Math.max(0, opacity)) / 100;
+    }
+    if (form[`show:${key}`] === false) value.show_in_header = false;
+    out.push(value);
+  }
+  // Values for keys the list does not hold right now are kept as they are.
+  for (const value of previous) if (!keys.includes(value.key)) out.push(value);
+  return out;
+}
+
+/** The fields for each number in the items: a switch, and once it is on its name, colour, line type and fill. */
+export function attributeValuesSchema(keys: string[], form: FormData): unknown[] {
+  const schema: unknown[] = [];
+  for (const key of keys) {
+    schema.push({ name: `on:${key}`, selector: { boolean: {} } });
+    if (!form[`on:${key}`]) continue;
+    const fills: [string, string][] = [
+      ['none', 'No fill'],
+      ['zero', 'Down to zero'],
+      ...keys.filter((other) => other !== key).map((other): [string, string] => [other, `Up to ${other}`]),
+    ];
+    schema.push(
+      grid({ name: `name:${key}`, selector: { text: {} } }, { name: `color:${key}`, selector: { color_rgb: {} } }),
+      grid(
+        { name: `line:${key}`, selector: select([['solid', 'Solid'], ['dashed', 'Dashed'], ['dotted', 'Dotted'], ['none', 'None']]) },
+        { name: `fill:${key}`, selector: select(fills) },
+      ),
+    );
+    if (form[`fill:${key}`] && form[`fill:${key}`] !== 'none') schema.push({ name: `opacity:${key}`, selector: number(0, 100, 5, '%') });
+    schema.push({ name: `show:${key}`, selector: { boolean: {} } });
+  }
+  return schema;
+}
+
+/** Labels for the values section's fields, which carry their key after a colon. */
+export function valueFieldLabel(name: string): string {
+  const [field, key] = name.split(/:(.*)/s);
+  const labels: Record<(typeof VALUE_FIELDS)[number], string> = {
+    on: key,
+    name: 'Name',
+    color: 'Colour',
+    line: 'Line type',
+    fill: 'Fill',
+    opacity: 'Fill opacity',
+    show: 'Show the value above the chart',
+  };
+  return labels[field as (typeof VALUE_FIELDS)[number]] ?? name;
 }
 
 export function entitySchema(
@@ -692,16 +811,7 @@ export function entitySchema(
     });
   }
   if (list.chosen) {
-    schema.push(
-      grid(
-        { name: 'attribute_time', selector: keyOptions(['auto', 'Automatic']) },
-        { name: 'attribute_value', selector: keyOptions(['auto', 'Automatic']) },
-      ),
-      grid(
-        { name: 'attribute_low', selector: keyOptions(['none', 'None']) },
-        { name: 'attribute_high', selector: keyOptions(['none', 'None']) },
-      ),
-    );
+    if (list.showTime) schema.push({ name: 'attribute_time', selector: keyOptions(['auto', 'Automatic']) });
   } else {
     schema.push({
       name: 'type',
@@ -714,15 +824,16 @@ export function entitySchema(
       ]),
     });
   }
-  if (kind === 'line') {
+  const curve = { name: 'curve', selector: select([['smooth', 'Smooth'], ['straight', 'Straight'], ['step', 'Steps']]) };
+  if (kind === 'line' && list.chosen) {
+    // Each value of the list has its own line type and fill, in the Values to draw section.
+    schema.push(curve, { name: 'width', selector: number(0.5, 8, 0.5, 'px', 'slider') });
+  } else if (kind === 'line') {
     schema.push(
-      grid(
-        { name: 'curve', selector: select([['smooth', 'Smooth'], ['straight', 'Straight'], ['step', 'Steps']]) },
-        {
-          name: 'line_style',
-          selector: select([['auto', 'Automatic'], ['solid', 'Solid'], ['dashed', 'Dashed'], ['dotted', 'Dotted'], ['none', 'None']]),
-        },
-      ),
+      grid(curve, {
+        name: 'line_style',
+        selector: select([['auto', 'Automatic'], ['solid', 'Solid'], ['dashed', 'Dashed'], ['dotted', 'Dotted'], ['none', 'None']]),
+      }),
       { name: 'width', selector: number(0.5, 8, 0.5, 'px', 'slider') },
       { name: 'fill', selector: { boolean: {} } },
       { name: 'fill_opacity', selector: number(0, 100, 5, '%') },

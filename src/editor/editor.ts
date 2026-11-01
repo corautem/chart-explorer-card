@@ -1,10 +1,10 @@
 import { LitElement, css, html, nothing, svg } from 'lit';
-import type { CardConfigInput, EntityConfigInput } from '../config';
+import type { AttributeSourceInput, CardConfigInput, EntityConfigInput } from '../config';
 import type { HomeAssistant } from '../ha-types';
 import { seriesColor, toHex, toRgb } from '../chart/theme';
 import { isMissingState, stateColor, type StateColorContext } from '../chart/states';
 import { isStateKind, kindSettled, rowKind } from '../rows';
-import { itemKeys, listAttributes } from '../data/attribute';
+import { automaticValueKey, hasKnownTimeKey, itemKeys, listAttributes, numberKeys } from '../data/attribute';
 import { DEFAULT_QUICK_RANGES } from '../config';
 import { PRESET_IDS } from '../time/range';
 import {
@@ -38,6 +38,11 @@ import {
   type EntityItem,
   type FormData,
   type ListSource,
+  attributeValues,
+  attributeValuesSchema,
+  valueFieldLabel,
+  valuesFromForm,
+  valuesToForm,
 } from './schema';
 
 type Tab = 'entities' | 'general' | 'visual' | 'advanced';
@@ -132,7 +137,7 @@ export class ChartExplorerCardEditor extends LitElement {
   private _drag?: Drag;
   private _focusHandle?: number;
   /** Which foldable groups are open; all start folded. */
-  private readonly _open = new Set<string>();
+  private readonly _open = new Set<string>(['attribute-values']);  // The values to draw from a list start open: they are what the list is chosen for.
   /** States each entity had in the last 30 days, and states typed in, for the state colours. */
   private readonly _seenStates = new Map<string, string[]>();
   private readonly _addedStates = new Map<string, string[]>();
@@ -585,10 +590,12 @@ export class ChartExplorerCardEditor extends LitElement {
     // A list from one of the entity's attributes, such as a forecast, is drawn as a line.
     const source = typeof item === 'string' ? undefined : item.attribute;
     const chosen = (typeof source === 'string' ? source : source?.name) ?? '';
+    const raw = chosen ? stateObj?.attributes[chosen] : undefined;
     const list: ListSource = {
       attributes: listAttributes(stateObj?.attributes),
-      keys: chosen ? itemKeys(stateObj?.attributes[chosen]) : [],
+      keys: itemKeys(raw),
       chosen,
+      showTime: Boolean(chosen) && (!hasKnownTimeKey(raw) || typeof source === 'object' && Boolean(source?.time)),
     };
     // States recorded in the last 30 days decide for a sensor that is unavailable or unknown right now.
     const recorded = this._seenStates.get(id);
@@ -602,6 +609,7 @@ export class ChartExplorerCardEditor extends LitElement {
         <span class="edit-title">${this._displayName(item)}</span>
       </div>
       ${this._entityForm(entitySchema(kind, autoKind, states, list), item, index, defaultColor)}
+      ${chosen ? this._renderAttributeValues(item, index, raw) : nothing}
       ${isStateKind(kind) ? this._renderStateColors(item, index, states) : nothing}
       <div class="edit-actions">
         <button class="danger" @click=${() => this._remove(index)}>${icon('delete')}<span>Remove this entity</span></button>
@@ -690,6 +698,61 @@ export class ChartExplorerCardEditor extends LitElement {
       dark: this._dark,
       options: Array.isArray(options) ? options.map(String) : undefined,
     };
+  }
+
+  /** The numbers in a list's items, each switched on to draw it, with its name, colour, line type and fill. */
+  private _renderAttributeValues(item: EntityItem, index: number, raw: unknown) {
+    const e: EntityConfigInput = typeof item === 'string' ? { entity: item } : item;
+    const values = attributeValues(e, automaticValueKey(raw));
+    const found = numberKeys(raw);
+    // Values set before for keys the list lacks right now stay listed, so they can be switched off.
+    const keys = [...found, ...values.map((value) => value.key).filter((key) => !found.includes(key))];
+    const entityColor = e.color ?? seriesColor(index, this._dark).color;
+    const form = valuesToForm(values, keys, entityColor);
+    const friendly = this.hass?.states[e.entity]?.attributes.friendly_name;
+    const defaultName = (key: string) => (values.length <= 1 ? (e.name ?? String(friendly ?? e.entity)) : key);
+    const helper = (schema: { name: string }) => {
+      const [field, key] = schema.name.split(/:(.*)/s);
+      if (field === 'name') return `Leave empty for "${defaultName(key)}".`;
+      if (field === 'opacity') return form[`fill:${key}`] === 'zero' ? 'Leave empty for a fill that fades downwards.' : 'Leave empty for 18 %.';
+      return undefined;
+    };
+    const content = keys.length
+      ? html`
+          <p class="list-help">
+            Each number in the list's items can be drawn as a line of its own. To shade a range, such as from pv_estimate10 to
+            pv_estimate90, fill one value up to the other and set its line type to None.
+          </p>
+          <ha-form
+            .hass=${this.hass}
+            .data=${form}
+            .schema=${attributeValuesSchema(keys, form)}
+            .computeLabel=${(schema: { name: string }) => valueFieldLabel(schema.name)}
+            .computeHelper=${helper}
+            @value-changed=${(event: CustomEvent<{ value: FormData }>) => this._onAttributeValues(event, index, keys, raw)}
+          ></ha-form>
+        `
+      : html`<p class="list-help">The list's items hold no numbers right now.</p>`;
+    return this._group('attribute-values', 'Values to draw', content);
+  }
+
+  private _onAttributeValues(event: CustomEvent<{ value: FormData }>, index: number, keys: string[], raw: unknown): void {
+    event.stopPropagation();
+    const entities = [...this._entities];
+    const item = entities[index];
+    const e: EntityConfigInput = typeof item === 'string' ? { entity: item } : { ...item };
+    const entityColor = e.color ?? seriesColor(index, this._dark).color;
+    const values = valuesFromForm(event.detail.value, keys, attributeValues(e, automaticValueKey(raw)), entityColor);
+    const source: AttributeSourceInput = typeof e.attribute === 'string' ? { name: e.attribute } : { ...(e.attribute as AttributeSourceInput) };
+    // The values list replaces the older value, low and high, and the line and fill settings that went with them.
+    delete source.value;
+    delete source.low;
+    delete source.high;
+    delete e.line_style;
+    delete e.fill;
+    delete e.fill_opacity;
+    entities[index] = { ...e, attribute: { ...source, values } };
+    this._commit(entities);
   }
 
   private _renderStateColors(item: EntityItem, index: number, states: string[]) {

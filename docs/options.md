@@ -83,7 +83,7 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | Option | Default | Description |
 |---|---|---|
 | `entity` | required | Entity ID. |
-| `attribute` | none | Draw a list kept in an attribute instead of the recorded history, such as a solar forecast: the attribute's name, or `{ name, time, value, low, high }` with the keys in each item; `low` and `high` add a shaded range. See [Forecasts and other lists](chart-types.md#forecasts-and-other-lists-from-attributes). |
+| `attribute` | none | Draw values from a list kept in an attribute instead of the recorded history, such as a solar forecast: `{ name, values }`, with one entry per value to draw (`key`, and optionally `name`, `color`, `line_style`, `fill`, `fill_opacity`, `show_in_header`). See [Forecasts and other lists](chart-types.md#forecasts-and-other-lists-from-attributes). |
 | `type` | automatic | How the entity is drawn: `line`, `bar`, `timeline` or `band`. Automatic draws numbers as lines (bars in a bar chart) and text or on/off states as a timeline strip. |
 | `state_colors` | automatic | Colours for states of a timeline or band, such as `{ standby: "#9e9e9e", defrost: "#3987e5" }`. |
 | `on_states` | all but quiet states | For bands: the states that shade the chart, such as `[heat, defrost]`. |
@@ -95,7 +95,7 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | `fill` | `false` | Fill under the line, fading downwards unless `fill_opacity` is set. |
 | `fill_opacity` | fading | 0 to 1: an even fill at this opacity, such as `0.35`, instead of a fill that fades downwards. |
 | `width` | `2` | Line width in pixels. |
-| `y_axis` | by unit | `left`, `right`, or any other name for a separate unlabelled scale. By default the first unit uses the left axis, the second the right, and further units get their own scale. |
+| `y_axis` | by unit | `left`, `right`, or any other name for a separate unlabelled scale. By default the first unit uses the left axis, the second the right, and further units get their own scale. Units of one family, such as W and kW, share a scale in the first one's unit; the others are converted for drawing. |
 | `decimals` | the entity's display precision | Decimal places for the value. |
 | `show_in_header` | `true` | `false` hides the entity from the values row; its line stays. |
 | `show_unit` | `true` | `false` leaves the unit off the value above the chart and in the tooltip. |

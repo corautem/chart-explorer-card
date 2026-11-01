@@ -9,7 +9,7 @@ A Home Assistant dashboard card for exploring history: lines, stacked areas, bar
 ## Features
 
 - **Eight ways to draw history:** lines, stacked areas, bars per hour, day, week or month, pie, donut, heatmaps of numbers or of states, and timeline strips or shaded bands for entities such as a heat pump status or a door.
-- **Forecasts and other lists:** a list kept in an attribute, such as a solar forecast or electricity prices, is drawn into the future, with a shaded range from a low to a high estimate.
+- **Forecasts and other lists:** the values in a list kept in an attribute, such as a solar forecast or electricity prices, are drawn into the future, each with its own colour, line and fill, and with shaded ranges between them.
 - **Time controls in one row:** previous and next, Now, and a Presets menu with quick ranges from 1 hour to 1 year, presets such as Today or Last month, and a custom range.
 - **Drag to move, pinch to zoom:** the card loads finer data as you zoom in; a double-tap goes back.
 - **Values that follow the cursor:** each entity's value sits above the chart in its colour; tap a name to fade that entity.
@@ -47,7 +47,7 @@ A picture and an example for each: [Chart types](docs/chart-types.md).
 1. Download both files from the [latest release](https://github.com/corautem/chart-explorer-card/releases/latest): `chart-explorer-card.js` (the card) and `chart-explorer-card-editor.js` (the visual editor, loaded only when you edit a card).
 2. Copy them into your Home Assistant configuration folder, in `/config/www/chart-explorer-card/`.
 3. In Home Assistant, open **Settings → Dashboards**, then the three-dot menu → **Resources** → **Add resource**. (The Resources entry appears only with **Advanced mode** on in your user profile.)
-   - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.8.0`
+   - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.8.1`
    - Type: **JavaScript module**
 4. Reload the browser.
 
@@ -146,7 +146,7 @@ entities:
 <details>
 <summary><b>A solar forecast beside the measured power</b></summary>
 
-The forecast comes from a list in the forecast sensor's `detailedForecast` attribute, as Solcast and Predbat keep it. See [Forecasts and other lists](docs/chart-types.md#forecasts-and-other-lists-from-attributes).
+The forecast comes from the list in the forecast sensor's `detailedForecast` attribute, as Solcast and Predbat keep it. In the editor, set **Draw from** to that attribute and switch on the values to draw. See [Forecasts and other lists](docs/chart-types.md#forecasts-and-other-lists-from-attributes).
 
 ```yaml
 type: custom:chart-explorer-card
@@ -156,14 +156,17 @@ entities:
   - entity: sensor.solar_power
     name: Solar power
   - entity: sensor.pv_forecast_today
-    name: Forecast
-    unit: kW
-    line_style: dashed
     attribute:
       name: detailedForecast
-      value: pv_estimate
-      low: pv_estimate10
-      high: pv_estimate90
+      values:
+        - key: pv_estimate
+          name: Forecast
+          line_style: dashed
+        - key: pv_estimate90
+          name: Forecast 90%
+          line_style: none
+          fill: pv_estimate10
+          show_in_header: false
 ```
 
 ![Measured solar power with the forecast as a dashed line and a shaded range from the low to the high estimate](docs/images/forecast.png)

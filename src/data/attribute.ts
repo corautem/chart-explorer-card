@@ -1,12 +1,10 @@
 import type { AttributeSource } from '../config';
 import { indexAtOrAfter, indexAtOrBefore } from './series';
 
-/** A list read from an attribute: times, values and, for a shaded range, low and high values. */
+/** One value read from each item of an attribute's list, with the items' times. */
 export interface AttributeSeries {
   t: number[];
   v: number[];
-  low?: number[];
-  high?: number[];
 }
 
 /** Keys that usually hold the time of each item, in the order they are tried. */
@@ -44,13 +42,14 @@ function guessValueKey(item: Record<string, unknown>, timeKey: string | undefine
 /**
  * Reads a list of `{ time, value }` items, `[time, value]` pairs, or a map of
  * times to values. Items without a time are skipped; a missing value leaves a
- * gap. The result is sorted by time, and a repeated time keeps its last item.
+ * gap. The result is sorted by time, and a repeated time keeps its last item,
+ * so every value read from the same list gets the same times.
  */
 export function attributeSeries(raw: unknown, source: AttributeSource): AttributeSeries {
-  const points: { t: number; v: number; low: number; high: number }[] = [];
-  const add = (time: unknown, value: unknown, low?: unknown, high?: unknown) => {
+  const points: { t: number; v: number }[] = [];
+  const add = (time: unknown, value: unknown) => {
     const t = toTime(time);
-    if (Number.isFinite(t)) points.push({ t, v: toNumber(value), low: toNumber(low), high: toNumber(high) });
+    if (Number.isFinite(t)) points.push({ t, v: toNumber(value) });
   };
   if (Array.isArray(raw)) {
     let timeKey = source.time;
@@ -63,7 +62,7 @@ export function attributeSeries(raw: unknown, source: AttributeSource): Attribut
         timeKey ??= TIME_KEYS.find((key) => key in record);
         valueKey ??= guessValueKey(record, timeKey);
         if (!timeKey) continue;
-        add(record[timeKey], valueKey ? record[valueKey] : undefined, source.low && record[source.low], source.high && record[source.high]);
+        add(record[timeKey], valueKey ? record[valueKey] : undefined);
       }
     }
   } else if (raw && typeof raw === 'object') {
@@ -71,23 +70,14 @@ export function attributeSeries(raw: unknown, source: AttributeSource): Attribut
   }
   points.sort((a, b) => a.t - b.t);
   const out: AttributeSeries = { t: [], v: [] };
-  const ranged = Boolean(source.low && source.high);
-  if (ranged) {
-    out.low = [];
-    out.high = [];
-  }
   for (const point of points) {
     const last = out.t.length - 1;
     if (last >= 0 && out.t[last] === point.t) {
       out.t.pop();
       out.v.pop();
-      out.low?.pop();
-      out.high?.pop();
     }
     out.t.push(point.t);
     out.v.push(point.v);
-    out.low?.push(point.low);
-    out.high?.push(point.high);
   }
   return out;
 }
@@ -97,12 +87,7 @@ export function sliceSeries(series: AttributeSeries, start: number, end: number)
   const from = Math.max(0, indexAtOrBefore(series.t, start));
   const after = indexAtOrAfter(series.t, end);
   const to = after < 0 || after >= series.t.length ? series.t.length : after + 1;
-  return {
-    t: series.t.slice(from, to),
-    v: series.v.slice(from, to),
-    low: series.low?.slice(from, to),
-    high: series.high?.slice(from, to),
-  };
+  return { t: series.t.slice(from, to), v: series.v.slice(from, to) };
 }
 
 /** Attributes of an entity that hold such a list, for the editor to offer. */
@@ -112,9 +97,37 @@ export function listAttributes(attributes: Record<string, unknown> | undefined):
     .map(([key]) => key);
 }
 
+function firstItem(raw: unknown): Record<string, unknown> | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  return raw.find((item) => item && typeof item === 'object' && !Array.isArray(item)) as Record<string, unknown> | undefined;
+}
+
 /** The keys of the first item in an attribute's list. */
 export function itemKeys(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  const first = raw.find((item) => item && typeof item === 'object' && !Array.isArray(item)) as Record<string, unknown> | undefined;
+  const first = firstItem(raw);
   return first ? Object.keys(first) : [];
+}
+
+/** The keys holding numbers in the first item, such as pv_estimate and pv_estimate10: the values that can be drawn. */
+export function numberKeys(raw: unknown): string[] {
+  const first = firstItem(raw);
+  if (!first) return [];
+  return Object.keys(first).filter((key) => !TIME_KEYS.includes(key) && Number.isFinite(toNumber(first[key])));
+}
+
+/** Whether the time key in the items is one found automatically. */
+export function hasKnownTimeKey(raw: unknown): boolean {
+  const first = firstItem(raw);
+  return Boolean(first && TIME_KEYS.some((key) => key in first));
+}
+
+/** The value key picked automatically, when there is one. */
+export function automaticValueKey(raw: unknown): string | undefined {
+  const first = firstItem(raw);
+  return first ? guessValueKey(first, TIME_KEYS.find((key) => key in first)) : undefined;
+}
+
+/** A unit for a list kept by an energy sensor: forecast slots hold power, so kWh suggests kW. */
+export function suggestedListUnit(entityUnit: unknown): string {
+  return ({ Wh: 'W', kWh: 'kW', MWh: 'MW' } as Record<string, string>)[String(entityUnit)] ?? '';
 }

@@ -203,6 +203,8 @@ describe('editor layout', () => {
     schemas.entitySchema('bar'),
     schemas.entitySchema('timeline', 'timeline'),
     schemas.entitySchema('band', 'timeline', ['on', 'off']),
+    schemas.entitySchema('line', 'line', [], { attributes: ['f'], keys: ['t', 'a'], chosen: 'f', showTime: true }),
+    schemas.attributeValuesSchema(['a', 'b'], { 'on:a': true, 'fill:a': 'b', 'on:b': true }),
   ] as Field[][];
 
   it('pairs only fields of the same kind, and never switches or sliders', () => {

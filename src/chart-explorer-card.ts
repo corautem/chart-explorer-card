@@ -21,7 +21,8 @@ import { addUnits, startOfUnit } from './time/range';
 import { resolveWeekStart } from './time/week';
 import { MetaCache, WindowCache, cacheKey, canReuse, loadWindow, rawFrom, seriesFor, type LoadInput } from './data/loader';
 import { bucketAt, bucketPeriodFor, bucketValues, periodEdges, windowValue } from './data/buckets';
-import { attributeSeries, sliceSeries, type AttributeSeries } from './data/attribute';
+import { attributeSeries, sliceSeries, suggestedListUnit, type AttributeSeries } from './data/attribute';
+import { sameFamily, unitFactor } from './units';
 import { chooseResolution } from './data/resolution';
 import { appendPoint, decimate, holdValues, indexAtOrBefore, stateAt, trimBefore, valueAt } from './data/series';
 import type { BucketPeriod, LoadedData, Resolution, Series } from './data/types';
@@ -42,7 +43,7 @@ import { buildPieOption, pieCentre, type PlotPie } from './chart/pie';
 import { buildHeatmapOption, heatColor, valueRange, type HeatCell } from './chart/heatmap';
 import { isMissingState, isOnState, isQuietState, stateColor } from './chart/states';
 import { mainState, periodStates, stateDurations, timelineSegments, type PeriodStates } from './chart/timeline';
-import { readTheme, seriesColor, withAlpha, type Theme } from './chart/theme';
+import { readTheme, seriesColor, shadeColor, withAlpha, type Theme } from './chart/theme';
 import { InteractionController, type InteractionHost } from './chart/interaction';
 import { isStateKind, kindSettled, rowKind, type RowKind } from './rows';
 import { buildCsv, buildPieCsv, type CsvColumn, type CsvSlice } from './export/csv';
@@ -53,7 +54,7 @@ import { buttonLabel, menuLabel, presetName, t, type StringKey } from './localiz
 import { icon } from './ui/icons';
 import { cardStyles } from './ui/styles';
 
-const VERSION = '0.8.0';
+const VERSION = '0.8.1';
 // The chart's inner edge and ECharts' gap between numbers and the plot, in pixels.
 const GRID_EDGE = 4;
 const LABEL_MARGIN = 8;
@@ -809,11 +810,12 @@ export class ChartExplorerCard extends LitElement {
     return {
       row,
       name: row.name ?? state?.attributes.friendly_name ?? row.entity,
-      color: row.color ?? palette.color,
-      dashed: row.color ? false : palette.dashed,
+      // An entity's second and later values start from its colour, moved towards grey.
+      color: row.color ?? (row.shade ? shadeColor(row.baseColor ?? palette.color, row.shade) : palette.color),
+      dashed: row.color || row.shade !== undefined ? false : palette.dashed,
       // A list from an attribute has no unit of its own; the entity's unit belongs to its state.
       unit: row.attribute
-        ? (row.unit ?? '')
+        ? (row.unit ?? suggestedListUnit(state?.attributes.unit_of_measurement))
         : row.unit ??
         state?.attributes.unit_of_measurement ??
         this._data?.entities.get(row.entity)?.statisticsUnit ??
@@ -837,14 +839,18 @@ export class ChartExplorerCard extends LitElement {
     return series;
   }
 
-  /** The list in a row's attribute, read again only when the attribute changes. */
-  private _attribute(row: EntityConfig): AttributeSeries {
+  /**
+   * A value from the list in a row's attribute (its own, or `key` for the value
+   * its fill reaches up to), read again only when the attribute changes.
+   */
+  private _attribute(row: EntityConfig, key = row.attribute?.value): AttributeSeries {
     const source = row.attribute as NonNullable<EntityConfig['attribute']>;
     const raw = this._hass?.states[row.entity]?.attributes[source.name];
-    const memo = this._attributeMemo.get(row.key);
+    const memoKey = `${row.key}|${key ?? ''}`;
+    const memo = this._attributeMemo.get(memoKey);
     if (memo && memo.raw === raw) return memo.series;
-    const series = attributeSeries(raw, source);
-    this._attributeMemo.set(row.key, { raw, series });
+    const series = attributeSeries(raw, { ...source, value: key });
+    this._attributeMemo.set(memoKey, { raw, series });
     return series;
   }
 
@@ -1132,7 +1138,7 @@ export class ChartExplorerCard extends LitElement {
     const now = Date.now();
     const width = chart.getWidth() || this._chartWidth || 600;
     const columns = Math.max(60, Math.round(width));
-    const { axes, axisOf } = this._axes(config);
+    const { axes, axisOf, factorOf } = this._axes(config);
     const axis = this._axisFor(w);
     const extendTo = Math.min(w.end, now);
     const pixel = (w.end - w.start) / columns;
@@ -1148,7 +1154,11 @@ export class ChartExplorerCard extends LitElement {
         // A list from an attribute is drawn as it is, into the future, without thinning or holding.
         const list = sliceSeries(this._attribute(row), w.start, w.end);
         data = { t: list.t, v: list.v };
-        if (list.low && list.high && !stacked) band = { low: list.low, high: list.high };
+        if (row.fillTo && !stacked) {
+          // The same list gives the same times, so the two values pair up point by point.
+          const other = sliceSeries(this._attribute(row, row.fillTo), w.start, w.end);
+          band = { low: other.v, high: list.v, opacity: row.fillOpacity ?? 0.18 };
+        }
       } else if (this._data && !stacked) {
         data = decimate(this._series(row), w.start, w.end, columns);
         if (row.curve !== 'step') data = holdValues(data, 2 * pixel, rawFrom(row, this._data));
@@ -1172,10 +1182,25 @@ export class ChartExplorerCard extends LitElement {
       };
     });
     if (stacked && this._data) series = this._alignStack(series, lineRows, w, columns, extendTo);
+    // Rows in W on a kW scale (and the like) are drawn converted.
+    series = series.map((line) => {
+      const factor = factorOf.get(line.key) ?? 1;
+      if (factor === 1) return line;
+      const scale = (values: number[]) => values.map((value) => value * factor);
+      return {
+        ...line,
+        data: { t: line.data.t, v: scale(line.data.v) },
+        band: line.band && { ...line.band, low: scale(line.band.low), high: scale(line.band.high) },
+      };
+    });
 
     const barRows = config.entities.filter((_, i) => kinds[i] === 'bar');
     const placed = placeBars(
-      barRows.map((row) => this._buckets(row) ?? { t: [], end: [], v: [] }),
+      barRows.map((row) => {
+        const buckets = this._buckets(row) ?? { t: [], end: [], v: [] };
+        const factor = factorOf.get(row.key) ?? 1;
+        return factor === 1 ? buckets : { ...buckets, v: buckets.v.map((value) => value * factor) };
+      }),
       config.stacked,
     );
     const bars: PlotBar[] = barRows.map((row, k) => ({
@@ -1440,12 +1465,18 @@ export class ChartExplorerCard extends LitElement {
   }
 
   /** One y-axis per unit: the first on the left, the second on the right, others unlabelled. */
-  private _axes(config: CardConfig): { axes: PlotAxis[]; axisOf: Map<string, number> } {
+  /**
+   * One scale per unit, the first on the left and the second on the right. Units
+   * of one family, such as W and kW, share a scale in the first one's unit; the
+   * others are converted for drawing (`factorOf`), and their values keep their own unit.
+   */
+  private _axes(config: CardConfig): { axes: PlotAxis[]; axisOf: Map<string, number>; factorOf: Map<string, number> } {
     const ids: string[] = [];
     const axisUnits: string[] = [];
     const withBars: boolean[] = [];
     const units: string[] = [];
     const axisOf = new Map<string, number>();
+    const factorOf = new Map<string, number>();
     for (const row of config.entities) {
       const kind = this._kind(row);
       if (kind !== 'line' && kind !== 'bar') continue;
@@ -1453,6 +1484,7 @@ export class ChartExplorerCard extends LitElement {
       let id = row.yAxis;
       if (!id) {
         let u = units.indexOf(unit);
+        if (u < 0) u = units.findIndex((other) => sameFamily(other, unit));
         if (u < 0) u = units.push(unit) - 1;
         id = u === 0 ? 'left' : u === 1 ? 'right' : `unit:${unit}`;
       }
@@ -1464,6 +1496,7 @@ export class ChartExplorerCard extends LitElement {
       }
       if (kind === 'bar') withBars[index] = true;
       axisOf.set(row.key, index);
+      factorOf.set(row.key, unitFactor(unit, axisUnits[index]));
     }
     if (!ids.length) {
       ids.push('left');
@@ -1478,7 +1511,7 @@ export class ChartExplorerCard extends LitElement {
       max: config.yAxes[id]?.max,
       zero: withBars[i],
     }));
-    return { axes, axisOf };
+    return { axes, axisOf, factorOf };
   }
 
   /** A row's value at `ms`, as the tooltip writes it. */
@@ -1721,17 +1754,11 @@ export class ChartExplorerCard extends LitElement {
       config.chartType === 'heatmap'
         ? [this._heatRow()].filter((row): row is EntityConfig => Boolean(row))
         : config.entities.filter((row) => !this._faded.has(row.key));
-    const columns: CsvColumn[] = rows.flatMap((row): CsvColumn | CsvColumn[] => {
+    const columns: CsvColumn[] = rows.map((row): CsvColumn => {
       const view = this._view(row);
       if (row.attribute) {
-        // A list from an attribute, with its low and high values when it has a shaded range.
         const list = this._attribute(row);
-        const unit = view.unit ? ` (${view.unit})` : '';
-        const out: CsvColumn[] = [{ header: header(view), t: list.t, v: list.v }];
-        if (list.low && list.high) {
-          out.push({ header: `${view.name} low${unit}`, t: list.t, v: list.low }, { header: `${view.name} high${unit}`, t: list.t, v: list.high });
-        }
-        return out;
+        return { header: header(view), t: list.t, v: list.v };
       }
       const buckets = this._usesBuckets(row) ? this._buckets(row) : undefined;
       if (buckets) {

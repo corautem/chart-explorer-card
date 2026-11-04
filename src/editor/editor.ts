@@ -599,7 +599,11 @@ export class ChartExplorerCardEditor extends LitElement {
     };
     // States recorded in the last 30 days decide for a sensor that is unavailable or unknown right now.
     const recorded = this._seenStates.get(id);
-    const kind = chosen ? 'line' : rowKind(type, chartType, stateObj, recorded);
+    // A meter divided by others is a ratio: bars, or a line of the ratio so far.
+    const divideBy = typeof item === 'string' ? undefined : item.divide_by;
+    const ratio = Array.isArray(divideBy) ? divideBy.length > 0 : Boolean(divideBy);
+    const ratioKind = type === 'line' || type === 'bar' ? type : chartType === 'bar' ? 'bar' : 'line';
+    const kind = chosen ? 'line' : ratio ? ratioKind : rowKind(type, chartType, stateObj, recorded);
     const autoKind = rowKind('auto', chartType, stateObj, recorded);
     if (!chosen && !kindSettled('auto', stateObj, recorded) && !this._seenStates.has(id) && !this._fetching.has(id)) this._fetchStates(id);
     const states = isStateKind(kind) ? this._knownStates(item) : [];
@@ -608,7 +612,7 @@ export class ChartExplorerCardEditor extends LitElement {
         <button class="back" @click=${this._closeEditor}>${icon('back')}<span>All entities</span></button>
         <span class="edit-title">${this._displayName(item)}</span>
       </div>
-      ${this._entityForm(entitySchema(kind, autoKind, states, list), item, index, defaultColor)}
+      ${this._entityForm(entitySchema(kind, ratio ? (chartType === 'bar' ? 'bar' : 'line') : autoKind, states, list, ratio), item, index, defaultColor)}
       ${chosen ? this._renderAttributeValues(item, index, raw) : nothing}
       ${isStateKind(kind) ? this._renderStateColors(item, index, states) : nothing}
       <div class="edit-actions">

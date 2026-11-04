@@ -22,7 +22,8 @@ import { resolveWeekStart } from './time/week';
 import { MetaCache, WindowCache, cacheKey, canReuse, loadWindow, rawFrom, seriesFor, type LoadInput } from './data/loader';
 import { bucketAt, bucketPeriodFor, bucketValues, periodEdges, windowValue } from './data/buckets';
 import { attributeSeries, sliceSeries, suggestedListUnit, type AttributeSeries } from './data/attribute';
-import { sameFamily, unitFactor } from './units';
+import { ratioPeriods, runningRatio, windowRatio, type RatioPart, type RatioPeriods } from './data/ratio';
+import { inCommonUnits, sameFamily, unitFactor } from './units';
 import { chooseResolution } from './data/resolution';
 import { appendPoint, decimate, holdValues, indexAtOrBefore, stateAt, trimBefore, valueAt } from './data/series';
 import type { BucketPeriod, LoadedData, Resolution, Series } from './data/types';
@@ -54,7 +55,7 @@ import { buttonLabel, menuLabel, presetName, t, type StringKey } from './localiz
 import { icon } from './ui/icons';
 import { cardStyles } from './ui/styles';
 
-const VERSION = '0.8.1';
+const VERSION = '0.8.2';
 // The chart's inner edge and ECharts' gap between numbers and the plot, in pixels.
 const GRID_EDGE = 4;
 const LABEL_MARGIN = 8;
@@ -116,7 +117,10 @@ interface HeatKeyItem {
 
 interface PieRow {
   row: EntityConfig;
+  /** In the entity's own unit, as the values row and the CSV show it. */
   value: number;
+  /** In one unit per family (W and kW alike), as the slice is drawn. */
+  drawn: number;
   share: number;
 }
 
@@ -145,6 +149,7 @@ export class ChartExplorerCard extends LitElement {
   private _stateHeatMemo?: StateHeat;
   /** Lists read from attributes, kept until the attribute changes. */
   private readonly _attributeMemo = new Map<string, { raw: unknown; series: AttributeSeries }>();
+  private readonly _ratioMemo = new Map<string, { version: number; ratio: RatioPeriods }>();
   private readonly _seriesMemo = new Map<string, { version: number; series: Series }>();
   private _loading = false;
   private _slow = false;
@@ -209,6 +214,7 @@ export class ChartExplorerCard extends LitElement {
       config.period,
       config.entities.map((row) => row.type),
       config.entities.map((row) => row.attribute?.name ?? ''),
+      config.entities.map((row) => (row.ratio ? [...row.ratio.add, ...row.ratio.divideBy] : [])),
     ]);
     const sameData = previous !== undefined && dataKey === this._dataKey;
     this._config = config;
@@ -543,11 +549,15 @@ export class ChartExplorerCard extends LitElement {
   private _loadInput(hass: HomeAssistant, w: TimeWindow, now: number, resolution?: Resolution): LoadInput {
     const config = this._config as CardConfig;
     const ids = (keep: (row: EntityConfig) => boolean) => config.entities.filter(keep).map((row) => row.entity);
+    // A ratio needs every meter it adds up or divides by, per period.
+    const bucketIds = config.entities
+      .filter((row) => this._usesBuckets(row))
+      .flatMap((row) => [row.entity, ...(row.ratio ? [...row.ratio.add, ...row.ratio.divideBy] : [])]);
     return {
       hass,
-      entityIds: this._isTimeChart() ? ids((row) => !row.attribute && this._kind(row) === 'line') : [],
+      entityIds: this._isTimeChart() ? ids((row) => !row.attribute && !row.ratio && this._kind(row) === 'line') : [],
       textIds: ids((row) => isStateKind(this._kind(row))),
-      bucketIds: ids((row) => this._usesBuckets(row)),
+      bucketIds: [...new Set(bucketIds)],
       bucketPeriod: this._bucketPeriod(w),
       weekStart: this._weekStart,
       window: w,
@@ -814,14 +824,18 @@ export class ChartExplorerCard extends LitElement {
       color: row.color ?? (row.shade ? shadeColor(row.baseColor ?? palette.color, row.shade) : palette.color),
       dashed: row.color || row.shade !== undefined ? false : palette.dashed,
       // A list from an attribute has no unit of its own; the entity's unit belongs to its state.
-      unit: row.attribute
+      unit: row.ratio
+        ? (row.unit ?? this._ratio(row)?.unit ?? '')
+        : row.attribute
         ? (row.unit ?? suggestedListUnit(state?.attributes.unit_of_measurement))
         : row.unit ??
         state?.attributes.unit_of_measurement ??
         this._data?.entities.get(row.entity)?.statisticsUnit ??
         this._data?.buckets?.entities.get(row.entity)?.unit ??
         '',
-      decimals: row.attribute
+      decimals: row.ratio
+        ? (row.decimals ?? 2)
+        : row.attribute || row.multiply !== undefined
         ? row.decimals
         : (row.decimals ??
           this._hass?.entities?.[row.entity]?.display_precision ??
@@ -834,7 +848,8 @@ export class ChartExplorerCard extends LitElement {
     if (!this._data) return { t: [], v: [] };
     const memo = this._seriesMemo.get(row.key);
     if (memo && memo.version === this._version) return memo.series;
-    const series = seriesFor(row, this._data, this._config?.statistic);
+    let series = seriesFor(row, this._data, this._config?.statistic);
+    if (row.multiply !== undefined) series = { ...series, v: scaled(series.v, row.multiply) };
     this._seriesMemo.set(row.key, { version: this._version, series });
     return series;
   }
@@ -849,7 +864,8 @@ export class ChartExplorerCard extends LitElement {
     const memoKey = `${row.key}|${key ?? ''}`;
     const memo = this._attributeMemo.get(memoKey);
     if (memo && memo.raw === raw) return memo.series;
-    const series = attributeSeries(raw, { ...source, value: key });
+    const list = attributeSeries(raw, { ...source, value: key });
+    const series = row.multiply === undefined ? list : { t: list.t, v: scaled(list.v, row.multiply) };
     this._attributeMemo.set(memoKey, { raw, series });
     return series;
   }
@@ -860,6 +876,11 @@ export class ChartExplorerCard extends LitElement {
     const known = this._kinds.get(row.key);
     if (known) return known;
     if (row.attribute) return 'line';
+    // A ratio is a bar per period, or in a line chart the ratio so far.
+    if (row.ratio) {
+      if (row.type === 'line' || row.type === 'bar') return row.type;
+      return this._config?.chartType === 'bar' ? 'bar' : 'line';
+    }
     // A sensor that is unavailable or unknown right now is judged by its loaded history.
     const state = this._hass?.states[row.entity];
     const recorded = this._data?.entities.get(row.entity)?.raw.s;
@@ -877,20 +898,73 @@ export class ChartExplorerCard extends LitElement {
   /** Rows drawn from values per period: bars, and every number in a pie or heatmap. */
   private _usesBuckets(row: EntityConfig): boolean {
     if (row.attribute) return false;
+    // Ratios are drawn on a time axis only: pies and heatmaps leave them out.
+    if (row.ratio) return this._isTimeChart();
     const kind = this._kind(row);
     return this._isTimeChart() ? kind === 'bar' : !isStateKind(kind);
   }
 
   private _buckets(row: EntityConfig): RowBuckets | undefined {
+    if (row.ratio) return this._ratioBuckets(row);
     const entry = this._data?.buckets?.entities.get(row.entity);
     if (!entry) return undefined;
     const memo = this._bucketMemo.get(row.key);
     if (memo && memo.version === this._version) return memo.buckets;
     const { buckets, meanType } = entry;
-    const v = bucketValues(buckets, meanType, row.statistic ?? this._config?.statistic);
+    const v = scaled(bucketValues(buckets, meanType, row.statistic ?? this._config?.statistic), row.multiply);
     const result = { t: buckets.t, end: buckets.end, v, meanType };
     this._bucketMemo.set(row.key, { version: this._version, buckets: result });
     return result;
+  }
+
+  /** A ratio row's periods: its meters' rises and their ratio, worked out again when the data changes. */
+  private _ratio(row: EntityConfig): RatioPeriods | undefined {
+    const data = this._data?.buckets;
+    const source = row.ratio;
+    if (!data || !source) return undefined;
+    const memo = this._ratioMemo.get(row.key);
+    if (memo && memo.version === this._version) return memo.ratio;
+    const part = (id: string): RatioPart => {
+      const entry = data.entities.get(id);
+      const state = this._hass?.states[id];
+      const stateClass = state?.attributes.state_class;
+      return {
+        id,
+        change: entry?.buckets.change ?? [],
+        unit: entry?.unit ?? String(state?.attributes.unit_of_measurement ?? ''),
+        // A meter has a running total: statistics with a sum, or a total state class.
+        meter: entry ? !entry.meanType || stateClass === 'total' || stateClass === 'total_increasing' : false,
+        found: Boolean(state),
+      };
+    };
+    const first = data.entities.get(row.entity)?.buckets ?? { t: [], end: [] };
+    const ratio = ratioPeriods(
+      first.t,
+      first.end,
+      [row.entity, ...source.add].map(part),
+      source.divideBy.map(part),
+      source.minDivisor,
+    );
+    this._ratioMemo.set(row.key, { version: this._version, ratio });
+    return ratio;
+  }
+
+  /** The values a ratio row draws per period: each period's ratio for bars, the ratio so far for a line. */
+  private _ratioBuckets(row: EntityConfig): RowBuckets | undefined {
+    const ratio = this._ratio(row);
+    const w = this._window;
+    if (!ratio || !w) return undefined;
+    const v = this._kind(row) === 'line' ? runningRatio(ratio, w.start, Math.min(w.end, Date.now())) : ratio.v;
+    return { t: ratio.t, end: ratio.end, v: scaled(v, row.multiply), meanType: true };
+  }
+
+  /** Why a ratio row cannot be drawn, naming the meter: missing, or a measurement rather than a meter. */
+  private _ratioProblem(row: EntityConfig): string | undefined {
+    const problem = this._ratio(row)?.problem;
+    if (!problem) return undefined;
+    return problem.reason === 'not_found'
+      ? `${problem.id} was not found.`
+      : `${problem.id} is a measurement, not a meter: a ratio needs meters with a running total, such as kWh.`;
   }
 
   /** A state as Home Assistant shows it, such as "Standby" or "Open". */
@@ -932,14 +1006,17 @@ export class ChartExplorerCard extends LitElement {
     const until = Math.min(w.end, Date.now());
     const rows: PieRow[] = [];
     for (const row of config.entities) {
-      if (isStateKind(this._kind(row)) || this._faded.has(row.key)) continue;
+      if (isStateKind(this._kind(row)) || row.ratio || this._faded.has(row.key)) continue;
       const buckets = this._buckets(row);
       if (!buckets) continue;
       const value = windowValue(buckets, w.start, until, row.statistic ?? config.statistic);
-      if (value > 0) rows.push({ row, value, share: 0 });
+      if (value > 0) rows.push({ row, value, drawn: value, share: 0 });
     }
-    const total = rows.reduce((sum, item) => sum + item.value, 0);
-    for (const item of rows) item.share = (item.value / total) * 100;
+    // A charger in kW beside sensors in W: compare them in one unit.
+    const drawn = inCommonUnits(rows.map((item) => ({ value: item.value, unit: this._view(item.row).unit })));
+    rows.forEach((item, i) => (item.drawn = drawn[i]));
+    const total = rows.reduce((sum, item) => sum + item.drawn, 0);
+    for (const item of rows) item.share = (item.drawn / total) * 100;
     return rows;
   }
 
@@ -964,6 +1041,17 @@ export class ChartExplorerCard extends LitElement {
         title: this._title(row),
         color: this._stateTextColor(row, state.state),
       };
+    }
+    if (row.ratio) {
+      const problem = this._ratioProblem(row);
+      if (problem) return { text: 'n/a', numeric: false, title: problem };
+      const buckets = this._buckets(row);
+      if (cursor !== undefined) return this._numberReading(view, buckets ? bucketAt(buckets, cursor) : NaN);
+      // The whole window: the sum of one side's rises over the sum of the other's.
+      const ratio = this._ratio(row);
+      const w = this._window;
+      const value = ratio && w ? windowRatio(ratio, w.start, Math.min(w.end, Date.now())) * (row.multiply ?? 1) : NaN;
+      return { ...this._numberReading(view, value), title: t('ratio_shown') };
     }
     if (row.attribute) {
       // A forecast has values after the present: the row shows the one now, or at the cursor.
@@ -994,7 +1082,7 @@ export class ChartExplorerCard extends LitElement {
     const state = this._hass?.states[row.entity];
     if (!state) return { text: 'n/a', numeric: false, title: t('not_found') };
     const title = this._title(row);
-    const value = stateToNumber(state.state);
+    const value = stateToNumber(state.state) * (row.multiply ?? 1);
     if (Number.isNaN(value)) {
       return { text: this._hass?.formatEntityState?.(state) ?? state.state, numeric: false, title };
     }
@@ -1012,6 +1100,8 @@ export class ChartExplorerCard extends LitElement {
 
   /** Hover text for a value: why it is missing, or that a tap opens more-info. */
   private _title(row: EntityConfig): string {
+    const ratioProblem = row.ratio && this._ratioProblem(row);
+    if (ratioProblem) return ratioProblem;
     const problem = this._data?.entities.get(row.entity)?.error as StringKey | undefined;
     return problem ? t(problem) : t('more_info');
   }
@@ -1150,7 +1240,12 @@ export class ChartExplorerCard extends LitElement {
       const view = this._view(row);
       let data: { t: number[]; v: number[] } = { t: [], v: [] };
       let band: PlotSeries['band'];
-      if (row.attribute) {
+      if (row.ratio) {
+        // The ratio so far, drawn at the end of each period (or at the present, for the one in progress).
+        const buckets = this._ratioBuckets(row);
+        const until = Date.now();
+        if (buckets) data = { t: buckets.end.map((end) => Math.min(end, until)), v: buckets.v };
+      } else if (row.attribute) {
         // A list from an attribute is drawn as it is, into the future, without thinning or holding.
         const list = sliceSeries(this._attribute(row), w.start, w.end);
         data = { t: list.t, v: list.v };
@@ -1163,7 +1258,7 @@ export class ChartExplorerCard extends LitElement {
         data = decimate(this._series(row), w.start, w.end, columns);
         if (row.curve !== 'step') data = holdValues(data, 2 * pixel, rawFrom(row, this._data));
       }
-      if (!stacked && !row.attribute) extendLastValue(data, extendTo);
+      if (!stacked && !row.attribute && !row.ratio) extendLastValue(data, extendTo);
       const axisIndex = axisOf.get(row.key) ?? 0;
       return {
         key: row.key,
@@ -1178,10 +1273,21 @@ export class ChartExplorerCard extends LitElement {
         axisIndex,
         data,
         band,
-        stack: stacked ? `stack-${axisIndex}` : undefined,
+        // Ratios cannot be added up, so they never join a stack.
+        stack: stacked && !row.ratio ? `stack-${axisIndex}` : undefined,
       };
     });
-    if (stacked && this._data) series = this._alignStack(series, lineRows, w, columns, extendTo);
+    if (stacked && this._data) {
+      const members = lineRows.filter((row) => !row.ratio);
+      const aligned = this._alignStack(
+        series.filter((line) => members.some((row) => row.key === line.key)),
+        members,
+        w,
+        columns,
+        extendTo,
+      );
+      series = series.map((line) => aligned.find((item) => item.key === line.key) ?? line);
+    }
     // Rows in W on a kW scale (and the like) are drawn converted.
     series = series.map((line) => {
       const factor = factorOf.get(line.key) ?? 1;
@@ -1201,7 +1307,7 @@ export class ChartExplorerCard extends LitElement {
         const factor = factorOf.get(row.key) ?? 1;
         return factor === 1 ? buckets : { ...buckets, v: buckets.v.map((value) => value * factor) };
       }),
-      config.stacked,
+      config.stacked ? barRows.map((row) => !row.ratio) : false,
     );
     const bars: PlotBar[] = barRows.map((row, k) => ({
       key: row.key,
@@ -1302,7 +1408,7 @@ export class ChartExplorerCard extends LitElement {
 
   /** The heatmap shows the first entity that is not faded, hour by hour. */
   private _heatRow(): EntityConfig | undefined {
-    const rows = (this._config?.entities ?? []).filter((row) => !row.attribute);
+    const rows = (this._config?.entities ?? []).filter((row) => !row.attribute && !row.ratio);
     return rows.find((row) => !this._faded.has(row.key)) ?? rows[0];
   }
 
@@ -1418,7 +1524,7 @@ export class ChartExplorerCard extends LitElement {
       pies.push({
         key: '__numbers',
         named: false,
-        slices: numbers.map((item) => ({ name: this._view(item.row).name, value: item.value, color: this._view(item.row).color })),
+        slices: numbers.map((item) => ({ name: this._view(item.row).name, value: item.drawn, color: this._view(item.row).color })),
       });
       names.push('');
     }
@@ -2100,10 +2206,17 @@ export class ChartExplorerCard extends LitElement {
     }
     if (this._loading && this._slow) return html`<div class="message">${t('loading')}</div>`;
     if (!this._loading && this._data && !this._hasVisibleData()) {
-      return html`<div class="message">${t('no_data')}</div>`;
+      // A ratio that cannot be worked out says why, instead of "No data for this range".
+      const problem = this._config?.entities.map((row) => (row.ratio ? this._ratioProblem(row) : undefined)).find(Boolean);
+      return html`<div class="message">${problem ?? t('no_data')}</div>`;
     }
     return nothing;
   }
+}
+
+/** Values multiplied by an entity's `multiply`, or as they are without one. */
+function scaled(values: number[], factor: number | undefined): number[] {
+  return factor === undefined ? values : values.map((value) => value * factor);
 }
 
 /** Continues the last value to `until`: a Home Assistant state holds until it changes. */

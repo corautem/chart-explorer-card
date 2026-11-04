@@ -13,7 +13,7 @@ interface FakeEntity {
   id: string;
   name: string;
   unit?: string;
-  stateClass?: 'measurement' | 'total_increasing';
+  stateClass?: 'measurement' | 'total_increasing' | 'total';
   deviceClass?: string;
   options?: string[];
   interval: number;
@@ -50,6 +50,26 @@ const meter = (rate: number, seed: number) => (t: number) => {
   const swing = 0.4 * rate * (24 / (2 * Math.PI)) * Math.cos((2 * Math.PI * (h - 9 - seed)) / 24);
   return Math.floor((rate * h - swing - 490_000 * rate) * 100) / 100;
 };
+
+/**
+ * A running total that never resets (state class total): `rate` an hour on
+ * average with a daily swing, counted from a made-up start.
+ */
+const runningTotal = (rate: number, seed: number) => (t: number) => {
+  const h = t / HOUR;
+  return rate * (h - 490_000) - 0.4 * rate * (24 / (2 * Math.PI)) * Math.cos((2 * Math.PI * (h - 9 - seed)) / 24);
+};
+/**
+ * Heat delivered for a heat pump's electricity meter in Wh: about `cop` times
+ * its energy, drifting over a few days, with small dips during a defrost.
+ */
+const heatDelivered = (electricityWh: (t: number) => number, cop: number, drift: number, dips: number) => (t: number) => {
+  const h = t / HOUR;
+  const heat = (cop * electricityWh(t)) / 1000 + drift * Math.sin((2 * Math.PI * h) / (24 * 5.3));
+  return Math.round((heat - dips * Math.max(0, Math.sin(2 * Math.PI * h * 1.3))) * 1000) / 1000;
+};
+const spaceHeatingWh = runningTotal(600, 2);
+const hotWaterWh = runningTotal(150, 7);
 
 /** A heat pump's status: standby, heating, hot water and a short defrost now and then. */
 const status = (t: number): string => {
@@ -178,6 +198,46 @@ export const ENTITIES: FakeEntity[] = [
     value: (t) => 300 + 200 * Math.max(0, daily(t)) + 80 * noise(Math.floor(t / MINUTE), 9),
   },
   {
+    id: 'sensor.demo_heat_pump_heat_space_heating',
+    name: 'Demo heat delivered, space heating',
+    unit: 'kWh',
+    stateClass: 'total',
+    deviceClass: 'energy',
+    interval: 5 * MINUTE,
+    precision: 3,
+    value: heatDelivered(spaceHeatingWh, 3.4, 8, 0.04),
+  },
+  {
+    id: 'sensor.demo_heat_pump_heat_hot_water',
+    name: 'Demo heat delivered, hot water',
+    unit: 'kWh',
+    stateClass: 'total',
+    deviceClass: 'energy',
+    interval: 5 * MINUTE,
+    precision: 3,
+    value: heatDelivered(hotWaterWh, 2.6, 2, 0),
+  },
+  {
+    id: 'sensor.demo_heat_pump_electricity_space_heating',
+    name: 'Demo electricity used, space heating',
+    unit: 'Wh',
+    stateClass: 'total',
+    deviceClass: 'energy',
+    interval: 5 * MINUTE,
+    precision: 0,
+    value: (t) => Math.round(spaceHeatingWh(t)),
+  },
+  {
+    id: 'sensor.demo_heat_pump_electricity_hot_water',
+    name: 'Demo electricity used, hot water',
+    unit: 'Wh',
+    stateClass: 'total',
+    deviceClass: 'energy',
+    interval: 5 * MINUTE,
+    precision: 0,
+    value: (t) => Math.round(hotWaterWh(t)),
+  },
+  {
     id: 'sensor.demo_solar_power',
     name: 'Demo solar power',
     unit: 'kW',
@@ -197,7 +257,11 @@ export const ENTITIES: FakeEntity[] = [
       const slots = forecastSlots(t).slice(48, 96);
       return slots.reduce((sum, slot) => sum + (slot.pv_estimate as number) / 2, 0);
     },
-    extra: (now) => ({ detailedForecast: forecastSlots(now) }),
+    // Also a map of times to numbers, the shape of Predbat's results attribute.
+    extra: (now) => ({
+      detailedForecast: forecastSlots(now),
+      results: Object.fromEntries(forecastSlots(now).map((slot) => [slot.period_start, slot.pv_estimate])),
+    }),
   },
   {
     id: 'sensor.demo_no_statistics',
@@ -314,7 +378,7 @@ function statistics(msg: Record<string, unknown>) {
       const bucketEnd = next(bucket);
       if (bucket < earliest) continue;
       const stop = Math.min(bucketEnd, compiled);
-      if (entity.stateClass === 'total_increasing') {
+      if (entity.stateClass === 'total_increasing' || entity.stateClass === 'total') {
         const reading = entity.value as (t: number) => number;
         rows.push({ start: bucket, end: bucketEnd, state: reading(stop), sum: reading(stop), change: reading(stop) - reading(bucket) });
         continue;
@@ -351,7 +415,7 @@ function metadata(msg: Record<string, unknown>) {
     .map((e) => ({
       statistic_id: e.id,
       has_mean: e.stateClass === 'measurement',
-      has_sum: e.stateClass === 'total_increasing',
+      has_sum: e.stateClass === 'total_increasing' || e.stateClass === 'total',
       mean_type: e.stateClass === 'measurement' ? 1 : 0,
       statistics_unit_of_measurement: e.unit ?? null,
     }));

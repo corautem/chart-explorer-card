@@ -55,6 +55,14 @@ export interface AttributeSourceInput {
 
 export interface EntityConfigInput {
   entity: string;
+  /** Multiplies every value, for a unit the card cannot convert, such as 1000 to show kW as W. */
+  multiply?: number;
+  /** A meter, or meters added together, whose rise divides this meter's rise: a ratio such as a heat pump's COP. */
+  divide_by?: string | string[];
+  /** Further meters whose rise is added to this one's before dividing. */
+  add?: string | string[];
+  /** The smallest divisor rise, in the first divisor's unit, for which a ratio is shown. */
+  min_divisor?: number;
   /** Draw a list from this attribute instead of the recorded history. */
   attribute?: string | AttributeSourceInput;
   name?: string;
@@ -153,6 +161,14 @@ export interface CardConfigInput {
   y_axes?: YAxisInput[];
 }
 
+/** The meters of a ratio row besides the entity itself. */
+export interface RatioSource {
+  add: string[];
+  divideBy: string[];
+  /** In the first divisor's unit; without it 50 Wh for energy meters, otherwise anything above zero. */
+  minDivisor?: number;
+}
+
 /** Where one row's line comes from: a key in each item of an attribute's list. */
 export interface AttributeSource {
   name: string;
@@ -167,6 +183,10 @@ export interface EntityConfig {
   index: number;
   entity: string;
   attribute?: AttributeSource;
+  /** A ratio: this meter's rise, plus `add`, divided by the rise of the `divideBy` meters. */
+  ratio?: RatioSource;
+  /** What every value is multiplied by; absent for 1. */
+  multiply?: number;
   /** For a value from an attribute: the key whose value the fill reaches up to, a shaded range. */
   fillTo?: string;
   /** For the second and later values of one entity: how far their default colour moves towards grey. */
@@ -418,6 +438,7 @@ export function legacyValues(source: { value?: string; low?: string; high?: stri
 
 function normalizeRow(e: EntityConfigInput, index: number): EntityConfig {
   const where = `Entity ${index + 1}`;
+  const ratio = ratioSource(e, where);
   if (!e || typeof e.entity !== 'string' || !ENTITY_ID.test(e.entity)) {
     throw new Error(`${where}: "entity" must be an entity ID such as sensor.outdoor_temperature.`);
   }
@@ -426,6 +447,8 @@ function normalizeRow(e: EntityConfigInput, index: number): EntityConfig {
     key: `${index}:${e.entity}`,
     index,
     entity: e.entity,
+    ratio,
+    multiply: multiplier(e.multiply, `${where} multiply`),
     name: e.name === undefined ? undefined : String(e.name),
     color: e.color === undefined ? undefined : String(e.color),
     unit: e.unit === undefined ? undefined : String(e.unit),
@@ -445,6 +468,37 @@ function normalizeRow(e: EntityConfigInput, index: number): EntityConfig {
     stateColors: stateColors(e.state_colors, `${where} state_colors`),
     onStates: e.on_states === undefined ? undefined : stringList(e.on_states, `${where} on_states`),
   };
+}
+
+function multiplier(value: unknown, name: string): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount === 0) throw new Error(`${name} must be a number other than 0, such as 1000.`);
+  return amount === 1 ? undefined : amount;
+}
+
+function entityList(value: unknown, name: string): string[] {
+  if (value === undefined || value === null || value === '') return [];
+  const list = Array.isArray(value) ? value : [value];
+  return list.map((id) => {
+    if (typeof id !== 'string' || !ENTITY_ID.test(id)) {
+      throw new Error(`${name} must be an entity ID, or a list of them, such as sensor.heat_pump_electricity.`);
+    }
+    return id;
+  });
+}
+
+function ratioSource(e: EntityConfigInput, where: string): RatioSource | undefined {
+  const divideBy = entityList(e.divide_by, `${where} divide_by`);
+  const add = entityList(e.add, `${where} add`);
+  const minDivisor = optionalNumber(e.min_divisor, `${where} min_divisor`);
+  if (!divideBy.length) {
+    if (add.length || minDivisor !== undefined) throw new Error(`${where}: add and min_divisor need divide_by, the meter to divide by.`);
+    return undefined;
+  }
+  if (e.attribute) throw new Error(`${where}: divide_by works on meters, not on lists from an attribute.`);
+  if (minDivisor !== undefined && minDivisor < 0) throw new Error(`${where} min_divisor must be zero or more.`);
+  return { add, divideBy, minDivisor };
 }
 
 function fillOpacity(value: unknown, name: string): number | undefined {

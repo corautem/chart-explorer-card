@@ -656,7 +656,14 @@ try {
     const value = await page.locator(`${card()} .item .value`).first().innerText();
     check('a meter in a bar chart shows the total of its bars', /kWh/.test(value), value);
     const lines = await download(page, 1, 'CSV');
-    check('bar CSV has one row per day', lines.length >= 7 && lines.length <= 9 && lines[1].includes(' 00:00:00'), `${lines.length - 1} rows, ${lines[1]}`);
+    // One row for each day of this week so far, up to and including today.
+    const days = await page.evaluate((sel) => {
+      const start = new Date(document.querySelector(sel)._window.start);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return Math.round((today.getTime() - start.getTime()) / 86_400_000) + 1;
+    }, card());
+    check('bar CSV has one row per day so far this week', lines.length - 1 === days && lines[1].includes(' 00:00:00'), `${lines.length - 1} rows for ${days} days, ${lines[1]}`);
     check('bar page loads without errors', errors.length === 0, errors.join(' | '));
     await context.close();
   }
@@ -792,6 +799,167 @@ try {
     const added = await page.evaluate((sel) => Boolean(document.querySelector(sel).shadowRoot.querySelector('[data-field="color:pv_estimate10"]')), ed);
     check('the switched-on value shows its colour, line type and fill', added);
     check('editor forecast page loads without errors', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    // A ratio such as a heat pump's COP: bars per day, the window as a ratio of sums, hover, CSV.
+    const { page, context, errors } = await open('?only=13&live=0&delay=50');
+    await page.waitForTimeout(1800);
+    await page.screenshot({ path: `${OUT}/cop-bars.png` });
+    const info = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      const option = el._chart.getOption();
+      const bars = option.series.filter((s) => s.type === 'custom' && !String(s.id).startsWith('__'));
+      const requested = window.__wsLog.filter((m) => m.type === 'recorder/statistics_during_period').flatMap((m) => m.statistic_ids);
+      return { bars: bars.length, filled: bars.every((s) => s.data.length > 0), requested: [...new Set(requested)] };
+    }, card());
+    check('each ratio draws its bars', info.bars === 3 && info.filled, JSON.stringify(info));
+    check('the divisors and added meters are loaded too', ['sensor.demo_heat_pump_electricity_space_heating', 'sensor.demo_heat_pump_heat_hot_water'].every((id) => info.requested.includes(id)), info.requested.join(' '));
+    const shown = (await page.locator(`${card()} .item .value`).allInnerTexts()).map((v) => v.trim());
+    check('the values row shows each window ratio with two decimals and no unit', shown.every((v) => /^\d+\.\d\d$/.test(v)), shown.join(' | '));
+    const window = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      const row = el._config.entities[2];
+      const ratio = el._ratio(row);
+      const w = el._window;
+      let num = 0;
+      let den = 0;
+      ratio.t.forEach((t, i) => {
+        if (ratio.end[i] > w.start && t < Math.min(w.end, Date.now()) && Number.isFinite(ratio.num[i]) && Number.isFinite(ratio.den[i])) {
+          num += ratio.num[i];
+          den += ratio.den[i];
+        }
+      });
+      const bars = ratio.v.filter(Number.isFinite);
+      return { sums: num / (den * ratio.denFactor), mean: bars.reduce((a, b) => a + b, 0) / bars.length };
+    }, card());
+    check('the window value is the ratio of the sums', Math.abs(Number.parseFloat(shown[2]) - window.sums) < 0.006, `${shown[2]} vs ${window.sums.toFixed(3)} (mean of bars ${window.mean.toFixed(3)})`);
+    const box = await page.locator(`${card()} .chart`).boundingBox();
+    await page.mouse.move(box.x + box.width * 0.06, box.y + box.height * 0.6);
+    await page.waitForTimeout(300);
+    const hovered = (await page.locator(`${card()} .item .value`).first().innerText()).trim();
+    const monday = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      return el._ratio(el._config.entities[0]).v[0];
+    }, card());
+    check('hovering a bar shows that day\'s ratio', Math.abs(Number.parseFloat(hovered) - monday) < 0.006, `${hovered} vs ${monday.toFixed(3)}`);
+    await page.mouse.move(box.x + box.width * 0.5, box.y - 120);
+    const lines = await download(page, 1, 'CSV');
+    check('CSV has the ratio per day', lines[0].endsWith(',Heating,Hot water,Both') && /^[^,]+,\d+(\.\d+)?,\d+(\.\d+)?,\d+(\.\d+)?$/.test(lines[1]), `${lines[0]} | ${lines[1]}`);
+    // A measurement as divisor: no bars, and a message that names it.
+    await page.evaluate((sel) => {
+      document.querySelector(sel).setConfig({
+        type: 'custom:chart-explorer-card',
+        chart_type: 'bar',
+        entities: [{ entity: 'sensor.demo_heat_pump_heat_space_heating', divide_by: 'sensor.demo_house_power', name: 'Wrong' }],
+      });
+    }, card());
+    await page.waitForTimeout(1500);
+    const message = await page.locator(`${card()} .message`).innerText().catch(() => '');
+    const value = (await page.locator(`${card()} .item .value`).first().innerText()).trim();
+    const title = await page.locator(`${card()} .item .value`).first().getAttribute('title');
+    check('a measurement as divisor is named in the message', /sensor\.demo_house_power is a measurement, not a meter/.test(message), message);
+    check('its value shows n/a and explains why on hover', value === 'n/a' && /is a measurement/.test(title ?? ''), `${value} | ${title}`);
+    check('ratio page loads without errors', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    // A line chart shows the ratio so far, ending at the window value.
+    const { page, context, errors } = await open('?only=14&live=0&delay=50');
+    await page.waitForTimeout(1800);
+    const line = await page.evaluate((sel) => {
+      const option = document.querySelector(sel)._chart.getOption();
+      const cop = option.series.find((s) => s.name === 'COP');
+      const points = cop.data.filter((p) => p[1] !== null);
+      return { points: points.length, last: points.length ? points[points.length - 1][1] : NaN, stacked: Boolean(cop.stack) };
+    }, card());
+    const shown = Number.parseFloat((await page.locator(`${card()} .item .value`).first().innerText()).trim());
+    check('a ratio in a line chart is the ratio so far', line.points >= 1 && !line.stacked, JSON.stringify(line));
+    check('the line ends at the window value', Math.abs(line.last - shown) < 0.006, `${line.last} vs ${shown}`);
+    check('running ratio page loads without errors', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    // The editor: Divide by, the meters to add and the minimum; and a map of times as a list.
+    const { page, context, errors } = await open('?editor=1&only=13&live=0&delay=50', { width: 1400, height: 1600 });
+    await page.waitForTimeout(1200);
+    const ed = 'chart-explorer-card-editor';
+    await page.locator(`${ed} .row .row-text`).nth(2).click();
+    await page.waitForTimeout(400);
+    const fields = await page.evaluate((sel) => {
+      const root = document.querySelector(sel).shadowRoot;
+      const field = (name) => root.querySelector(`[data-field="${name}"]`);
+      return {
+        divideBy: field('divide_by')?.value ?? null,
+        add: field('add')?.value ?? null,
+        min: Boolean(field('min_divisor')),
+        statistic: Boolean(field('statistic')),
+      };
+    }, ed);
+    check('the editor shows the divisors and the meters added', /electricity_space_heating, .*electricity_hot_water/.test(fields.divideBy ?? '') && /heat_hot_water/.test(fields.add ?? ''), JSON.stringify(fields));
+    check('a ratio shows the smallest divisor and no long-window statistic', fields.min && !fields.statistic, JSON.stringify(fields));
+    await page.locator(`${ed} [data-field="min_divisor"]`).fill('0.3');
+    await page.locator(`${ed} [data-field="min_divisor"]`).dispatchEvent('change');
+    await page.waitForTimeout(300);
+    const saved = JSON.parse((await page.locator('#saved-config').textContent()) || '{}').entities?.[2];
+    check('the smallest divisor is saved', saved?.min_divisor === 0.3 && Array.isArray(saved?.divide_by), JSON.stringify(saved));
+    check('editor ratio page loads without errors', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    // A map of times to numbers (the shape of Predbat's results) is offered and drawn.
+    const { page, context, errors } = await open('?editor=1&only=11&live=0&delay=50', { width: 1400, height: 1600 });
+    await page.waitForTimeout(1200);
+    const ed = 'chart-explorer-card-editor';
+    await page.locator(`${ed} .row .row-text`).nth(1).click();
+    await page.waitForTimeout(400);
+    const offered = await page.evaluate((sel) => [...document.querySelector(sel).shadowRoot.querySelectorAll('[data-field="attribute_name"] option')].map((o) => o.value), ed);
+    check('the editor offers a map of times as a list', offered.includes('results'), offered.join(' '));
+    await page.evaluate((sel) => {
+      document.querySelector(sel).setConfig({
+        type: 'custom:chart-explorer-card',
+        default_range: 'today',
+        entities: [{ entity: 'sensor.demo_pv_forecast', unit: 'kW', attribute: { name: 'results', values: [{ key: 'value', name: 'Plan' }] } }],
+      });
+    }, card());
+    await page.waitForTimeout(800);
+    const points = await page.evaluate((sel) => document.querySelector(sel)._chart.getOption().series.find((s) => s.name === 'Plan')?.data.length ?? 0, card());
+    check('a map of times draws as a line', points >= 40, String(points));
+    check('map page loads without errors', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    // A donut of power sensors in W and kW compares them in one unit; multiply converts what the card cannot.
+    const { page, context, errors } = await open('?only=8&live=0&delay=50');
+    await page.waitForTimeout(1200);
+    await page.evaluate((sel) => {
+      document.querySelector(sel).setConfig({
+        type: 'custom:chart-explorer-card',
+        chart_type: 'donut',
+        default_range: '24h',
+        entities: [{ entity: 'sensor.demo_house_power', name: 'House' }, { entity: 'sensor.demo_solar_power', name: 'Solar' }],
+      });
+    }, card());
+    await page.waitForTimeout(1500);
+    const shares = (await page.locator(`${card()} .item .value`).allInnerTexts()).map((v) => v.trim());
+    const solarShare = Number.parseFloat((shares[1].split('·')[1] ?? '0').replace('%', ''));
+    check('a donut compares W and kW in one unit', solarShare > 10 && /kW/.test(shares[1]) && /W/.test(shares[0]) && !/kW/.test(shares[0]), shares.join(' | '));
+    await page.evaluate((sel) => {
+      document.querySelector(sel).setConfig({
+        type: 'custom:chart-explorer-card',
+        default_range: '24h',
+        entities: [{ entity: 'sensor.demo_solar_power', name: 'Solar', multiply: 1000, unit: 'W' }],
+      });
+    }, card());
+    await page.waitForTimeout(1500);
+    const multiplied = await page.evaluate((sel) => {
+      const series = document.querySelector(sel)._chart.getOption().series.find((s) => s.name === 'Solar');
+      return Math.max(...series.data.map((p) => p[1] ?? 0));
+    }, card());
+    const solarValue = (await page.locator(`${card()} .item .value`).first().innerText()).trim();
+    check('multiply scales the line', multiplied > 100, String(multiplied));
+    check('multiply scales the value, shown in the unit set', /W$/.test(solarValue) && !/kW/.test(solarValue), solarValue);
+    check('unit fixes page loads without errors', errors.length === 0, errors.join(' | '));
     await context.close();
   }
   for (const width of [470, 900]) {

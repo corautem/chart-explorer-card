@@ -154,6 +154,36 @@ CONFIGS.push(
       },
     ],
   },
+  {
+    type: 'custom:chart-explorer-card',
+    title: 'Heat pump COP',
+    chart_type: 'bar',
+    period: 'day',
+    default_range: 'this_week',
+    entities: [
+      { entity: 'sensor.demo_heat_pump_heat_space_heating', divide_by: 'sensor.demo_heat_pump_electricity_space_heating', name: 'Heating' },
+      { entity: 'sensor.demo_heat_pump_heat_hot_water', divide_by: 'sensor.demo_heat_pump_electricity_hot_water', name: 'Hot water' },
+      {
+        entity: 'sensor.demo_heat_pump_heat_space_heating',
+        add: ['sensor.demo_heat_pump_heat_hot_water'],
+        divide_by: ['sensor.demo_heat_pump_electricity_space_heating', 'sensor.demo_heat_pump_electricity_hot_water'],
+        name: 'Both',
+      },
+    ],
+  },
+  {
+    type: 'custom:chart-explorer-card',
+    title: 'COP so far today',
+    default_range: 'today',
+    entities: [
+      {
+        entity: 'sensor.demo_heat_pump_heat_space_heating',
+        add: ['sensor.demo_heat_pump_heat_hot_water'],
+        divide_by: ['sensor.demo_heat_pump_electricity_space_heating', 'sensor.demo_heat_pump_electricity_hot_water'],
+        name: 'COP',
+      },
+    ],
+  },
 );
 
 if (params.get('perf')) {

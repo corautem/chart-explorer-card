@@ -251,6 +251,10 @@ const ENTITY_DEFAULTS = { curve: 'smooth', width: 2, fill: false, show_in_header
 // state_colors is not listed: the state colour form edits it, and the main form keeps it as it is.
 const ENTITY_KEYS = [
   'entity',
+  'multiply',
+  'divide_by',
+  'add',
+  'min_divisor',
   'attribute',
   'type',
   'on_states',
@@ -283,6 +287,8 @@ export function entityToForm(item: EntityItem, defaultColor: string): FormData {
     ...ENTITY_DEFAULTS,
     ...e,
     attribute: undefined,
+    divide_by: e.divide_by === undefined ? [] : [e.divide_by].flat(),
+    add: e.add === undefined ? [] : [e.add].flat(),
     attribute_name: source?.name ?? '',
     attribute_time: source?.time ?? 'auto',
     fill_opacity: e.fill_opacity === undefined ? undefined : Math.round(e.fill_opacity * 100),
@@ -308,6 +314,14 @@ export function entityFromForm(form: FormData, original: EntityItem, defaultColo
     else delete next.time;
     out.attribute = Object.keys(next).length === 1 ? next.name : next;
   }
+  const list = (value: unknown) => (Array.isArray(value) ? value.map(String).filter(Boolean) : value ? [String(value)] : []);
+  const divideBy = list(form.divide_by);
+  if (divideBy.length && !out.attribute) {
+    out.divide_by = divideBy.length === 1 ? divideBy[0] : divideBy;
+    const add = list(form.add);
+    if (add.length) out.add = add.length === 1 ? add[0] : add;
+    if (typeof form.min_divisor === 'number' && Number.isFinite(form.min_divisor)) out.min_divisor = form.min_divisor;
+  }
   if (form.type && form.type !== 'auto' && !out.attribute) out.type = form.type;
   if (typeof form.name === 'string' && form.name.trim()) out.name = form.name;
   if (Array.isArray(form.color)) {
@@ -325,6 +339,9 @@ export function entityFromForm(form: FormData, original: EntityItem, defaultColo
   if (typeof form.width === 'number' && form.width !== ENTITY_DEFAULTS.width) out.width = form.width;
   if (form.y_axis && form.y_axis !== 'auto') out.y_axis = form.y_axis;
   if (typeof form.decimals === 'number' && Number.isFinite(form.decimals)) out.decimals = form.decimals;
+  if (typeof form.multiply === 'number' && Number.isFinite(form.multiply) && form.multiply !== 0 && form.multiply !== 1) {
+    out.multiply = form.multiply;
+  }
   if (form.show_in_header === false) out.show_in_header = false;
   if (form.show_name === false) out.show_name = false;
   if (form.show_unit === false) out.show_unit = false;
@@ -400,6 +417,10 @@ export const LABELS: Record<string, string> = {
   line_style: 'Line type',
   fill: 'Fill under the line',
   fill_opacity: 'Fill opacity',
+  multiply: 'Multiply by',
+  divide_by: 'Divide by',
+  add: 'Add to this meter',
+  min_divisor: 'Smallest divisor',
   attribute_name: 'Draw from',
   attribute_time: 'Time in each item',
   unit: 'Unit',
@@ -463,6 +484,13 @@ export const HELPERS: Record<string, string> = {
   line_style: 'Automatic is a solid line; from the ninth entity on, lines are dashed so colours can repeat. None leaves only the fill or the shaded range.',
   fill_opacity: 'Leave empty for a fill that fades downwards; a percentage gives an even fill at that opacity.',
   attribute_name: 'The recorded history, or a list kept in one of the entity\'s attributes, such as a solar forecast or electricity prices. A list is drawn as it is now, including times still to come.',
+  multiply:
+    'Multiplies every value of this entity, for a unit the card cannot convert, such as 1000 to show a sensor in kW as W; set the unit to match. W and kW, Wh and kWh are converted without it. Leave empty for none.',
+  divide_by:
+    'Makes this meter a ratio: its rise in each period divided by the rise of these meters, added together. A heat pump\'s heat delivered divided by its electricity used gives its COP. Wh and kWh convert; the ratio has no unit unless you set one, such as COP.',
+  add: 'Meters whose rise is added to this one\'s before dividing, such as hot water to space heating.',
+  min_divisor:
+    'Periods where the divisor rose less than this, in its unit, stay empty, so a nearly idle day shows no absurd ratio. Leave empty for 50 Wh (0.05 kWh); other units count anything above zero.',
   attribute_time: 'The key holding each item\'s time. It is found automatically when it is called period_start, start, datetime, time and the like.',
   y_axis: 'Entities with different units cannot share one scale: 1,500 W would squash a 20 °C line flat. Automatic puts the first unit on the left-hand scale and the second on the right-hand scale. Choose Left or Right to put this entity on that scale yourself.',
   statistic: 'For every entity: windows longer than 24 hours keep one point per 5 minutes, hour or day, with its average, lowest and highest value. Highest keeps short peaks visible; lowest shows the dips. Energy and water meters always show their reading. An entity can choose differently in its own Advanced section.',
@@ -796,6 +824,7 @@ export function entitySchema(
   autoKind = 'line',
   states: string[] = [],
   list: ListSource = { attributes: [], keys: [], chosen: '' },
+  ratio = false,
 ): unknown[] {
   const numeric = kind === 'line' || kind === 'bar';
   const names = list.chosen && !list.attributes.includes(list.chosen) ? [...list.attributes, list.chosen] : list.attributes;
@@ -804,7 +833,12 @@ export function entitySchema(
     { name: 'entity', required: true, selector: { entity: {} } },
     grid({ name: 'name', selector: { text: {} } }, { name: 'color', selector: { color_rgb: {} } }),
   ];
-  if (names.length) {
+  // A meter can become a ratio; a list from an attribute cannot.
+  if (!list.chosen && numeric) {
+    schema.push({ name: 'divide_by', selector: { entity: { multiple: true } } });
+    if (ratio) schema.push({ name: 'add', selector: { entity: { multiple: true } } }, { name: 'min_divisor', selector: number(0, 1_000_000, 0.01) });
+  }
+  if (names.length && !ratio) {
     schema.push({
       name: 'attribute_name',
       selector: select([['', 'Recorded history'], ...names.map((name): [string, string] => [name, `Attribute: ${name}`])]),
@@ -819,8 +853,12 @@ export function entitySchema(
         ['auto', `Automatic (${KIND_NAMES[autoKind] ?? autoKind})`],
         ['line', 'Line'],
         ['bar', 'Bars'],
-        ['timeline', 'Timeline strip'],
-        ['band', 'Band behind the lines'],
+        ...(ratio
+          ? []
+          : ([
+              ['timeline', 'Timeline strip'],
+              ['band', 'Band behind the lines'],
+            ] as [string, string][])),
       ]),
     });
   }
@@ -850,13 +888,14 @@ export function entitySchema(
     schema.push(
       { name: 'show_unit', selector: { boolean: {} } },
       grid({ name: 'unit', selector: { text: {} } }, { name: 'decimals', selector: number(0, 6, 1) }),
+      { name: 'multiply', selector: number(-1_000_000, 1_000_000, 0.001) },
       {
         name: 'y_axis',
         selector: select([['auto', 'Automatic (by unit)'], ['left', 'Left scale'], ['right', 'Right scale']]),
       },
     );
-    // A list from an attribute is drawn as it is, so the choice for long windows does not apply.
-    if (!list.chosen) {
+    // A list from an attribute is drawn as it is, and a ratio divides rises, so the choice for long windows does not apply.
+    if (!list.chosen && !ratio) {
       schema.push({
         name: 'statistic',
         selector: select([

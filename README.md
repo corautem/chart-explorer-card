@@ -9,6 +9,7 @@ A Home Assistant dashboard card for exploring history: lines, stacked areas, bar
 ## Features
 
 - **Eight ways to draw history:** lines, stacked areas, bars per hour, day, week or month, pie, donut, heatmaps of numbers or of states, and timeline strips or shaded bands for entities such as a heat pump status or a door.
+- **Ratios such as a heat pump's COP:** one meter's rise divided by others' per bar, with the whole window's ratio above the chart and the ratio so far as a line.
 - **Forecasts and other lists:** the values in a list kept in an attribute, such as a solar forecast or electricity prices, are drawn into the future, each with its own colour, line and fill, and with shaded ranges between them.
 - **Time controls in one row:** previous and next, Now, and a Presets menu with quick ranges from 1 hour to 1 year, presets such as Today or Last month, and a custom range.
 - **Drag to move, pinch to zoom:** the card loads finer data as you zoom in; a double-tap goes back.
@@ -47,7 +48,7 @@ A picture and an example for each: [Chart types](docs/chart-types.md).
 1. Download both files from the [latest release](https://github.com/corautem/chart-explorer-card/releases/latest): `chart-explorer-card.js` (the card) and `chart-explorer-card-editor.js` (the visual editor, loaded only when you edit a card).
 2. Copy them into your Home Assistant configuration folder, in `/config/www/chart-explorer-card/`.
 3. In Home Assistant, open **Settings → Dashboards**, then the three-dot menu → **Resources** → **Add resource**. (The Resources entry appears only with **Advanced mode** on in your user profile.)
-   - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.8.1`
+   - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.8.2`
    - Type: **JavaScript module**
 4. Reload the browser.
 
@@ -140,6 +141,34 @@ entities:
 ```
 
 ![A week of heat pump status, each hour in the colour of its main state](docs/images/heatmap-states.png)
+
+</details>
+
+<details>
+<summary><b>A heat pump's COP per day</b></summary>
+
+Heat delivered divided by electricity used, each from its meter, for space heating, hot water and both together. See [Ratios](docs/chart-types.md#ratios-such-as-a-heat-pumps-cop).
+
+```yaml
+type: custom:chart-explorer-card
+title: Heat pump COP
+chart_type: bar
+period: day
+default_range: this_week
+entities:
+  - entity: sensor.heat_pump_heat_space_heating
+    divide_by: sensor.heat_pump_electricity_space_heating
+    name: Heating
+  - entity: sensor.heat_pump_heat_hot_water
+    divide_by: sensor.heat_pump_electricity_hot_water
+    name: Hot water
+  - entity: sensor.heat_pump_heat_space_heating
+    add: [sensor.heat_pump_heat_hot_water]
+    divide_by: [sensor.heat_pump_electricity_space_heating, sensor.heat_pump_electricity_hot_water]
+    name: Both
+```
+
+![Daily COP bars for space heating, hot water and both together this week](docs/images/cop.png)
 
 </details>
 

@@ -18,3 +18,21 @@ export function unitFactor(from: string, to: string): number {
   if (from === to || !sameFamily(from, to)) return 1;
   return FAMILIES[from][1] / FAMILIES[to][1];
 }
+
+/**
+ * Values brought into one unit per family, the first such unit met (W and kW
+ * into the first of them), so that shares of a pie compare like with like.
+ * Units outside the families stay as they are.
+ */
+export function inCommonUnits(items: { value: number; unit: string }[]): number[] {
+  const bases: string[] = [];
+  return items.map(({ value, unit }) => {
+    if (!sameFamily(unit, unit)) return value;
+    let base = bases.find((other) => sameFamily(other, unit));
+    if (!base) {
+      base = unit;
+      bases.push(unit);
+    }
+    return value * unitFactor(unit, base);
+  });
+}

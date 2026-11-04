@@ -10,7 +10,7 @@ Edit the card from the dashboard editor like any built-in card. The editor has f
 
 | Tab | What it holds |
 |---|---|
-| Entities | A search box at the top adds an entity. Below it, the entities in order, each with its colour: drag the handle to reorder (or focus it and use the arrow keys), the pencil opens the entity's settings in one scroll, and the bin removes. The entity page shows where the line comes from (Draw from: the recorded history, or a list in one of the entity's attributes, with the keys in each item) and how the entity is drawn (Draw as): line shape, type, width and fill for lines; the states that shade a band; a colour picker per state for timelines and bands (states from the last 30 days, and any you add); then name, colour, show in the values row, show the name, show unit, unit, decimal places, scale and the value drawn on long windows. |
+| Entities | A search box at the top adds an entity. Below it, the entities in order, each with its colour: drag the handle to reorder (or focus it and use the arrow keys), the pencil opens the entity's settings in one scroll, and the bin removes. The entity page shows Divide by (with the meters to add and the smallest divisor once it is set) for a ratio, where the line comes from (Draw from: the recorded history, or a list in one of the entity's attributes, with the keys in each item) and how the entity is drawn (Draw as): line shape, type, width and fill for lines; the states that shade a band; a colour picker per state for timelines and bands (states from the last 30 days, and any you add); then name, colour, show in the values row, show the name, show unit, unit, decimal places, scale and the value drawn on long windows. |
 | General | Title, chart type, starting window and what dragging the chart does, then folding groups: Bars (length of each bar, stacking; shown for bar charts), Quick ranges (the seven standard lengths at the top of the Presets menu; tap to show or hide), Menu entries (the nine presets, the same way) and Toolbar (position top, bottom or off, and a switch for each control). Quick ranges add lengths with "Past [number] [unit] Add length"; menu entries choose Past or Next, so a length can run into the future ("Next day"). Added lengths follow the standard ones in an amber shade, switch on and off, and × deletes them. |
 | Visual | Folding groups: values (above or below the chart, row alignment, value position, name alignment, value and name text size, space between values, show names), chart (faded line opacity, the now line, floating tooltip, rescaling), height and space inside the chart, timeline strips (strip height, names above the strips, states written inside), x-axis (time labels, their size, vertical grid lines) and y-axis (value labels, their size, units above the axes, starting at zero, horizontal grid lines). |
 | Advanced | Lightweight mode and animations, data sources, the value drawn on long windows for every entity, CSV export. Each setting has an explanation under it. |
@@ -83,6 +83,9 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | Option | Default | Description |
 |---|---|---|
 | `entity` | required | Entity ID. |
+| `divide_by` | none | A meter, or a list of meters added together, whose rise divides this meter's rise: a ratio such as a heat pump's COP. See [Ratios](chart-types.md#ratios-such-as-a-heat-pumps-cop). |
+| `add` | none | With `divide_by`: further meters whose rise is added to this one's before dividing. |
+| `min_divisor` | 50 Wh for energy meters | With `divide_by`: the smallest divisor rise, in the first divisor's unit, for which a period shows a ratio. Other units count anything above zero. |
 | `attribute` | none | Draw values from a list kept in an attribute instead of the recorded history, such as a solar forecast: `{ name, values }`, with one entry per value to draw (`key`, and optionally `name`, `color`, `line_style`, `fill`, `fill_opacity`, `show_in_header`). See [Forecasts and other lists](chart-types.md#forecasts-and-other-lists-from-attributes). |
 | `type` | automatic | How the entity is drawn: `line`, `bar`, `timeline` or `band`. Automatic draws numbers as lines (bars in a bar chart) and text or on/off states as a timeline strip. |
 | `state_colors` | automatic | Colours for states of a timeline or band, such as `{ standby: "#9e9e9e", defrost: "#3987e5" }`. |
@@ -90,13 +93,14 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | `name` | friendly name | Name under the value. |
 | `color` | from the palette | Any CSS colour for the line and the value. |
 | `unit` | the entity's unit | Unit shown after the value. |
+| `multiply` | none | Multiplies every value of the entity (lines, bars, pies, the values row and the CSV), for a unit the card cannot convert: `1000` shows a sensor in kW as W, with `unit: W` to match, and `-1` flips a sign. W and kW, Wh and kWh are converted without it. |
 | `curve` | `smooth` | `smooth`, `straight` or `step`. |
 | `line_style` | automatic | `solid`, `dashed`, `dotted` or `none` (no line, only its fill or shaded range). Automatic is solid, and dashed from the ninth entity on. |
 | `fill` | `false` | Fill under the line, fading downwards unless `fill_opacity` is set. |
 | `fill_opacity` | fading | 0 to 1: an even fill at this opacity, such as `0.35`, instead of a fill that fades downwards. |
 | `width` | `2` | Line width in pixels. |
 | `y_axis` | by unit | `left`, `right`, or any other name for a separate unlabelled scale. By default the first unit uses the left axis, the second the right, and further units get their own scale. Units of one family, such as W and kW, share a scale in the first one's unit; the others are converted for drawing. |
-| `decimals` | the entity's display precision | Decimal places for the value. |
+| `decimals` | the entity's display precision; 2 for a ratio | Decimal places for the value. |
 | `show_in_header` | `true` | `false` hides the entity from the values row; its line stays. |
 | `show_unit` | `true` | `false` leaves the unit off the value above the chart and in the tooltip. |
 | `show_name` | `true` | `false` shows this entity's value or state without its name. |

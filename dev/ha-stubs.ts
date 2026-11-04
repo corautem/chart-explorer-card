@@ -134,8 +134,11 @@ class FakeHaForm extends HTMLElement {
       for (const id of Object.keys(this.hass?.states ?? {})) list.append(new Option(id, id));
       box.setAttribute('list', list.id);
       box.placeholder = 'Search entities';
-      box.value = String(value ?? '');
-      box.onchange = () => emit(s.name, box.value);
+      // Several entities, as Home Assistant's picker allows with multiple: here a comma-separated list.
+      const multiple = Boolean((selector.entity as { multiple?: boolean } | null)?.multiple);
+      box.value = multiple ? (Array.isArray(value) ? value.join(', ') : '') : String(value ?? '');
+      box.onchange = () =>
+        emit(s.name, multiple ? box.value.split(',').map((id) => id.trim()).filter(Boolean) : box.value);
       wrap.append(list);
       input = box;
     } else {

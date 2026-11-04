@@ -90,10 +90,30 @@ export function sliceSeries(series: AttributeSeries, start: number, end: number)
   return { t: series.t.slice(from, to), v: series.v.slice(from, to) };
 }
 
-/** Attributes of an entity that hold such a list, for the editor to offer. */
+/** The name the editor gives the single value of a map of times or of [time, value] pairs. */
+export const SINGLE_VALUE_KEY = 'value';
+
+const looksLikeTime = (key: string) => /^\d{4}-\d{2}-\d{2}/.test(key) || /^\d{10}(\d{3})?$/.test(key);
+
+/** A map of times to numbers, such as Predbat's results: { "2026-11-04T10:00:00+00:00": 1.2, ... }. */
+function isTimeMap(raw: unknown): boolean {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return false;
+  const entries = Object.entries(raw as Record<string, unknown>).slice(0, 3);
+  return entries.length > 0 && entries.every(([key, value]) => looksLikeTime(key) && Number.isFinite(toNumber(value)));
+}
+
+/** A list of [time, value] pairs. */
+function isPairList(raw: unknown): boolean {
+  return Array.isArray(raw) && Array.isArray(raw[0]) && raw[0].length >= 2 && Number.isFinite(toTime(raw[0][0]));
+}
+
+/** One number per time, without keys of its own: a map of times or a list of pairs. */
+const isSingleValue = (raw: unknown) => isTimeMap(raw) || isPairList(raw);
+
+/** Attributes of an entity that hold such a list (items, pairs or a map of times), for the editor to offer. */
 export function listAttributes(attributes: Record<string, unknown> | undefined): string[] {
   return Object.entries(attributes ?? {})
-    .filter(([, value]) => Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && value[0] !== null)
+    .filter(([, value]) => Boolean(firstItem(value)) || isSingleValue(value))
     .map(([key]) => key);
 }
 
@@ -108,21 +128,27 @@ export function itemKeys(raw: unknown): string[] {
   return first ? Object.keys(first) : [];
 }
 
-/** The keys holding numbers in the first item, such as pv_estimate and pv_estimate10: the values that can be drawn. */
+/**
+ * The numbers that can be drawn: the keys holding numbers in the first item,
+ * such as pv_estimate and pv_estimate10, or the one value of a map or pairs.
+ */
 export function numberKeys(raw: unknown): string[] {
+  if (isSingleValue(raw)) return [SINGLE_VALUE_KEY];
   const first = firstItem(raw);
   if (!first) return [];
   return Object.keys(first).filter((key) => !TIME_KEYS.includes(key) && Number.isFinite(toNumber(first[key])));
 }
 
-/** Whether the time key in the items is one found automatically. */
+/** Whether the time key in the items is one found automatically (a map or pairs carry their times). */
 export function hasKnownTimeKey(raw: unknown): boolean {
+  if (isSingleValue(raw)) return true;
   const first = firstItem(raw);
   return Boolean(first && TIME_KEYS.some((key) => key in first));
 }
 
 /** The value key picked automatically, when there is one. */
 export function automaticValueKey(raw: unknown): string | undefined {
+  if (isSingleValue(raw)) return SINGLE_VALUE_KEY;
   const first = firstItem(raw);
   return first ? guessValueKey(first, TIME_KEYS.find((key) => key in first)) : undefined;
 }

@@ -248,38 +248,41 @@ export function buildOption(input: PlotInput): Record<string, unknown> {
 }
 
 /** Where each bar goes: side by side within its period, or stacked when `stacked` is set. */
+/**
+ * Bars side by side in each period, or piled up where `stacked` is true. With
+ * a list, rows marked true pile up in one slot and the others (ratios, which
+ * cannot be added up) stand beside it.
+ */
 export function placeBars(
   rows: { t: number[]; end: number[]; v: number[] }[],
-  stacked: boolean,
+  stacked: boolean | boolean[],
 ): BarShape[][] {
   const out: BarShape[][] = rows.map(() => []);
-  if (stacked) {
-    const up = new Map<number, number>();
-    const down = new Map<number, number>();
-    rows.forEach((row, k) => {
-      row.t.forEach((start, i) => {
-        const value = row.v[i];
-        if (!Number.isFinite(value) || value === 0) return;
-        const end = row.end[i];
-        const room = (end - start) * 0.1;
-        const pile = value > 0 ? up : down;
-        const base = pile.get(start) ?? 0;
-        pile.set(start, base + value);
-        out[k].push({ start: start + room, end: end - room, low: base, high: base + value });
-      });
-    });
-    return out;
-  }
-  const count = rows.length;
+  const piles = rows.map((_, k) => (Array.isArray(stacked) ? Boolean(stacked[k]) : stacked));
+  const anyPile = piles.some(Boolean);
+  // The pile takes the first slot; every other row gets one of its own.
+  const slots: number[] = [];
+  let next = anyPile ? 1 : 0;
+  piles.forEach((pile) => slots.push(pile ? 0 : next++));
+  const count = Math.max(1, next);
+  const up = new Map<number, number>();
+  const down = new Map<number, number>();
   rows.forEach((row, k) => {
     row.t.forEach((start, i) => {
       const value = row.v[i];
-      if (!Number.isFinite(value)) return;
+      if (!Number.isFinite(value) || (piles[k] && value === 0)) return;
       const end = row.end[i];
       const room = (end - start) * 0.1;
       const width = (end - start - 2 * room) / count;
-      const from = start + room + k * width;
-      out[k].push({ start: from, end: from + width, low: Math.min(0, value), high: Math.max(0, value) });
+      const from = start + room + slots[k] * width;
+      if (piles[k]) {
+        const pile = value > 0 ? up : down;
+        const base = pile.get(start) ?? 0;
+        pile.set(start, base + value);
+        out[k].push({ start: from, end: from + width, low: base, high: base + value });
+      } else {
+        out[k].push({ start: from, end: from + width, low: Math.min(0, value), high: Math.max(0, value) });
+      }
     });
   });
   return out;

@@ -26,6 +26,7 @@ const STRINGS = {
   no_history: 'No history for this period',
   more_info: 'Show details',
   total_shown: 'Total of the bars shown. Tap for details.',
+  ratio_shown: 'Ratio over the whole window shown. Tap for details.',
   fade: 'Fade or show the line',
   edit_range: 'Choose a custom range',
 } as const;

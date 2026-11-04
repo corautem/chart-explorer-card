@@ -66,6 +66,40 @@ entities:
 
 Automatic bar lengths are hours for windows up to two days, days up to 45 days, weeks up to 200 days, then months; `period` fixes one. The values row shows the total of the bars on screen for a meter, and the bar under the cursor while you hover.
 
+### Ratios, such as a heat pump's COP
+
+![Daily COP bars for space heating, hot water and both together this week](images/cop.png)
+
+`divide_by` turns a meter into a ratio: each bar is the meter's rise in that period divided by the rise of the meters named in `divide_by`, added together. A heat pump's heat delivered divided by its electricity used gives its coefficient of performance (COP). `add` names further meters added to the entity's rise first, such as hot water to space heating.
+
+```yaml
+type: custom:chart-explorer-card
+title: Heat pump COP
+chart_type: bar
+period: day
+default_range: this_week
+entities:
+  - entity: sensor.heat_pump_heat_space_heating
+    divide_by: sensor.heat_pump_electricity_space_heating
+    name: Heating
+  - entity: sensor.heat_pump_heat_hot_water
+    divide_by: sensor.heat_pump_electricity_hot_water
+    name: Hot water
+  - entity: sensor.heat_pump_heat_space_heating
+    add: [sensor.heat_pump_heat_hot_water]
+    divide_by: [sensor.heat_pump_electricity_space_heating, sensor.heat_pump_electricity_hot_water]
+    name: Both
+```
+
+- **Window value:** the values row shows the ratio over the whole window: the sum of the meters' rises divided by the sum of the divisors' rises, never the average of the bars. While you hover, the bar under the cursor.
+- **Units:** each meter is converted before adding up and dividing, so Wh and kWh mix. Units of one family give a plain number, shown without a unit unless `unit` sets one, such as `COP`; others give a unit such as kWh/m³. Ratios show two decimal places unless `decimals` says otherwise.
+- **Quiet periods:** a bar stays empty when the divisor rose less than `min_divisor` in that period (in the first divisor's unit), so a nearly idle day shows no absurd ratio. Without it the minimum is 50 Wh (0.05 kWh) for energy meters, and anything above zero for other units.
+- **Signs:** a meter that dips, such as heat delivered during a defrost, lowers its period's rise.
+- **Meters only:** the entity, the meters it adds and its divisors must be meters with a running total (a state class of total or total increasing). A measurement, such as power in W, leaves the row empty, and the card says which entity it is.
+- **Line charts** show the ratio so far: at the end of each period, the ratio from the window start ("COP so far today"), ending at the window value. `type: line` draws it over a bar chart too. Stacked areas and stacked bars never stack ratios, and pies, donuts and heatmaps leave them out.
+
+![A line through the day: the COP from midnight up to each hour, in a dark theme](images/cop-line.png)
+
 ## Pie and donut
 
 ![The time a heat pump spent in each state over a week](images/pie.png)
@@ -86,7 +120,7 @@ entities:
     name: Status
 ```
 
-The numbers share one pie; each entity with states gets its own, named above it. Each value in the row shows its share. Tap a slice to open the entity's details. Pies have no time axis, so dragging and zooming do nothing; the toolbar picks the window.
+The numbers share one pie; each entity with states gets its own, named above it. Values in W and kW (or Wh and kWh) are compared in one unit, so a charger in kW and a heater in W get their true shares; each value above the chart keeps its own unit. For other units, `multiply` brings a value into line, such as `multiply: 1000` with `unit: W` for a sensor in kW. Each value in the row shows its share. Tap a slice to open the entity's details. Pies have no time axis, so dragging and zooming do nothing; the toolbar picks the window.
 
 ## Heatmaps
 
@@ -145,7 +179,7 @@ entities:
 | `time` | The key with each item's time, as ISO text or epoch seconds or milliseconds. Found automatically when it is `period_start`, `start`, `start_time`, `datetime`, `time`, `from` or `date`. |
 | `values` | The numbers to draw, each a line of its own with `key` and optionally `name`, `color`, `line_style`, `fill` (`zero`, or another key to shade the range up to it), `fill_opacity` (0 to 1) and `show_in_header`. Without `values`, the list's only number is drawn. |
 
-Items can also be `[time, value]` pairs, and the attribute can be a map of times to values. The form from version 0.8.0 (`value`, `low` and `high`) still works.
+Items can also be `[time, value]` pairs, and the attribute can be a map of times to values, such as Predbat's `results`. The editor offers both with a single value called `value`; in YAML, `values: [{ key: value }]`. The form from version 0.8.0 (`value`, `low` and `high`) still works.
 
 - **Unit:** a list has no unit of its own. When the entity's unit is kWh (or Wh, MWh), the list is shown in kW (W, MW), because forecast slots hold power; otherwise set `unit` on the entity.
 - **Scales:** values in W and kW (or Wh and kWh) share one scale, in the unit of the first entity that has one; the others are converted for drawing, and their values above the chart keep their own unit. A solar power sensor in W and a forecast in kW draw on one scale.

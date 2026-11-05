@@ -4,9 +4,9 @@ import type { HomeAssistant } from '../ha-types';
 import { seriesColor, toHex, toRgb } from '../chart/theme';
 import { isMissingState, stateColor, type StateColorContext } from '../chart/states';
 import { isStateKind, kindSettled, rowKind } from '../rows';
-import { automaticValueKey, hasKnownTimeKey, itemKeys, listAttributes, numberKeys } from '../data/attribute';
+import { automaticValueKey, hasKnownTimeKey, isListValue, itemKeys, listAttributes, numberAttributes, numberKeys } from '../data/attribute';
 import { DEFAULT_QUICK_RANGES } from '../config';
-import { PRESET_IDS } from '../time/range';
+import { PRESET_IDS, parseSpan } from '../time/range';
 import {
   ADD_ENTITY_SCHEMA,
   BARS_SCHEMA,
@@ -358,6 +358,22 @@ export class ChartExplorerCardEditor extends LitElement {
     this._saveLists(key, [...selected, id], unused.filter((x) => x !== id));
   }
 
+  /** Adds a span typed as -12h+60h or today+72h; anything else is refused and the box stays for a fix. */
+  private _addSpan(key: RangeListKey, event: Event): void {
+    const input = (event.currentTarget as HTMLElement).closest('.add-span')?.querySelector<HTMLInputElement>('.span-text');
+    const span = parseSpan(input?.value ?? '');
+    if (!input || !span) {
+      input?.classList.add('invalid');
+      input?.focus();
+      return;
+    }
+    input.classList.remove('invalid');
+    input.value = '';
+    const { selected, unused } = this._lists(key);
+    if (selected.includes(span.id)) return;
+    this._saveLists(key, [...selected, span.id], unused.filter((x) => x !== span.id));
+  }
+
   /**
    * A list's standard entries as buttons that switch on and off, then custom
    * lengths in another shade, which switch too and can be deleted, then the row
@@ -390,7 +406,8 @@ export class ChartExplorerCardEditor extends LitElement {
           ${key === 'quick_ranges'
             ? 'Buttons at the top of the Presets menu, each a rolling window that ends now. Tap one to show or hide it.'
             : 'Entries in the Presets menu, above Custom. Tap one to show or hide it. Next lengths run from now into the future, for forecasts.'}
-          Lengths you add appear after these in a different shade; × deletes them.
+          Lengths you add appear after these in a different shade; × deletes them. A span covers the past and the future:
+          -12h+60h starts 12 hours ago and runs 60 hours (to 48 hours ahead), and today+72h starts at midnight and runs 3 days.
         </div>
         <div class="chips">${defaults.map((id) => chip(id, false))}${custom.map((id) => chip(id, true))}</div>
         <div class="add-range">
@@ -405,6 +422,10 @@ export class ChartExplorerCardEditor extends LitElement {
             ${UNITS.map(([value, label]) => html`<option value=${value} ?selected=${value === 'm'}>${label}</option>`)}
           </select>
           <button class="add-length" @click=${(event: Event) => this._addLength(key, event)}>Add length</button>
+        </div>
+        <div class="add-range add-span">
+          <input class="span-text" type="text" placeholder="-12h+60h or today+72h" aria-label="Span to add" />
+          <button class="add-span-button" @click=${(event: Event) => this._addSpan(key, event)}>Add span</button>
         </div>
       </div>
     `;
@@ -591,11 +612,15 @@ export class ChartExplorerCardEditor extends LitElement {
     const source = typeof item === 'string' ? undefined : item.attribute;
     const chosen = (typeof source === 'string' ? source : source?.name) ?? '';
     const raw = chosen ? stateObj?.attributes[chosen] : undefined;
+    // A named attribute without values that holds a single number is drawn from its history.
+    const history = Boolean(chosen) && !(typeof source === 'object' && source?.values?.length) && !isListValue(raw);
     const list: ListSource = {
       attributes: listAttributes(stateObj?.attributes),
+      numbers: numberAttributes(stateObj?.attributes),
       keys: itemKeys(raw),
       chosen,
-      showTime: Boolean(chosen) && (!hasKnownTimeKey(raw) || typeof source === 'object' && Boolean(source?.time)),
+      history,
+      showTime: Boolean(chosen) && !history && (!hasKnownTimeKey(raw) || typeof source === 'object' && Boolean(source?.time)),
     };
     // States recorded in the last 30 days decide for a sensor that is unavailable or unknown right now.
     const recorded = this._seenStates.get(id);
@@ -613,7 +638,7 @@ export class ChartExplorerCardEditor extends LitElement {
         <span class="edit-title">${this._displayName(item)}</span>
       </div>
       ${this._entityForm(entitySchema(kind, ratio ? (chartType === 'bar' ? 'bar' : 'line') : autoKind, states, list, ratio), item, index, defaultColor)}
-      ${chosen ? this._renderAttributeValues(item, index, raw) : nothing}
+      ${chosen && !history ? this._renderAttributeValues(item, index, raw) : nothing}
       ${isStateKind(kind) ? this._renderStateColors(item, index, states) : nothing}
       <div class="edit-actions">
         <button class="danger" @click=${() => this._remove(index)}>${icon('delete')}<span>Remove this entity</span></button>
@@ -1141,6 +1166,15 @@ export class ChartExplorerCardEditor extends LitElement {
     }
     .add-range .amount {
       width: 72px;
+    }
+    .add-span {
+      margin-top: 6px;
+    }
+    .add-range .span-text {
+      width: 190px;
+    }
+    .add-range .span-text.invalid {
+      border-color: var(--error-color, #db4437);
     }
     .add-range button {
       color: var(--primary-color);

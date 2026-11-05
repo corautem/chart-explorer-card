@@ -62,4 +62,6 @@ export interface LoadedData {
   entities: Map<string, EntityData>;
   /** Present when the card draws bars, a pie or a heatmap. */
   buckets?: BucketData;
+  /** The recorded history of numeric attributes, by `entity|attribute`. */
+  attributes?: Map<string, Series>;
 }

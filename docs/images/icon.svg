@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Chart Explorer Card">
+  <!--
+    Chart Explorer Card's icon: one idea, a line through a chosen time window,
+    with the window's range bar beneath it. Flat colours on a 16-unit grid,
+    the drawing inside the central 96 to 416 safe area.
+  -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#2a78d6"/>
+  <!-- The chosen window: a darker panel. -->
+  <rect x="160" y="128" width="192" height="224" rx="16" fill="#164a8c"/>
+  <!-- Its range bar, as on a slider. -->
+  <rect x="160" y="384" width="192" height="32" rx="16" fill="#ffc24d"/>
+  <!-- The line, rising through the window. -->
+  <path d="M96 320L160 272L224 304L304 176L416 128" fill="none" stroke="#ffffff" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

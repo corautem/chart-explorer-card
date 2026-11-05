@@ -962,6 +962,107 @@ try {
     check('unit fixes page loads without errors', errors.length === 0, errors.join(' | '));
     await context.close();
   }
+  {
+    // A window from 12 hours ago to 48 hours ahead: history up to now, the forecast after it, a shifted forecast.
+    const { page, context, errors } = await open('?only=15&live=0&delay=50');
+    await page.waitForTimeout(1800);
+    await page.screenshot({ path: `${OUT}/battery-forecast.png` });
+    const info = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      const series = el._chart.getOption().series;
+      const last = (name) => {
+        const points = series.find((s) => s.name === name).data.filter((p) => p[1] !== null);
+        return points[points.length - 1][0];
+      };
+      const w = el._window;
+      return { start: w.start, end: w.end, now: Date.now(), actual: last('Actual'), forecast: last('Forecast'), shifted: last('8 hours ago') };
+    }, card());
+    const HOUR = 3_600_000;
+    check('the window runs from 12 hours ago to 48 hours ahead', Math.abs(info.now - 12 * HOUR - info.start) < 5 * 60_000 && Math.abs(info.now + 48 * HOUR - info.end) < 5 * 60_000, JSON.stringify(info));
+    check('history stops at the present', info.actual <= info.now + 60_000 && info.actual >= info.now - 15 * 60_000, `${(info.actual - info.now) / 60_000} min`);
+    check('the forecast list runs past the present', info.forecast > info.now + 40 * HOUR, `${(info.forecast - info.now) / HOUR} h`);
+    check('a -8h shift draws a forecast 8 hours on', Math.abs(info.shifted - (info.now + 8 * HOUR)) < 15 * 60_000, `${(info.shifted - info.now) / HOUR} h`);
+    const values = (await page.locator(`${card()} .item .value`).allInnerTexts()).map((v) => v.trim());
+    check('the values row shows kWh for history, the map and the shifted row', values.every((v) => /kWh$/.test(v)), values.join(' | '));
+    const button = (await page.locator(`${card()} .with-icon`).innerText()).trim();
+    check('the menu button names the span', button === '12 hours ago to 2 days ahead', button);
+    const before = await label(page);
+    await page.locator(`${card()} .toolbar [aria-label="Previous period"]`).click();
+    await page.waitForTimeout(600);
+    const stepped = await page.evaluate((sel) => document.querySelector(sel)._window, card());
+    check('the arrow steps back by the window length', Math.abs(stepped.end - (info.start)) < 5 * 60_000, `${(info.start - stepped.end) / 60_000} min apart`);
+    await page.locator(`${card()} .toolbar button`, { hasText: 'Now' }).click();
+    await page.waitForTimeout(600);
+    check('Now returns to the span', (await label(page)) === before, await label(page));
+    check('battery forecast page loads without errors', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    // Today for 3 days: a single-number attribute from its history, and an entity in the values row only.
+    const { page, context, errors } = await open('?only=16&live=0&delay=50');
+    await page.waitForTimeout(1800);
+    const info = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      const option = el._chart.getOption();
+      const w = el._window;
+      const threshold = option.series.find((s) => s.name === 'Low threshold');
+      const asked = window.__wsLog.filter((m) => m.type === 'history/history_during_period' && m.no_attributes === false).flatMap((m) => m.entity_ids);
+      return {
+        start: w.start,
+        end: w.end,
+        threshold: threshold ? threshold.data.filter((p) => p[1] !== null).length : 0,
+        thresholdAxis: threshold?.yAxisIndex,
+        scales: option.yAxis.filter((a) => a.show !== false).length,
+        hidden: option.series.some((s) => s.name === 'Energy so far'),
+        asked,
+      };
+    }, card());
+    const midnight = new Date();
+    midnight.setHours(0, 0, 0, 0);
+    const third = new Date(midnight);
+    third.setDate(third.getDate() + 3);
+    check('today+72h runs from midnight to midnight three days on', info.start === midnight.getTime() && info.end === third.getTime(), JSON.stringify(info));
+    check('a single-number attribute draws its history', info.threshold >= 1 && info.asked.includes('planner.demo_import_rate'), JSON.stringify(info));
+    check('the attribute shares the scale of its entity\'s unit', info.scales === 1 && info.thresholdAxis === 0, JSON.stringify(info));
+    check('an entity shown only in the values row draws nothing', !info.hidden, JSON.stringify(info));
+    const values = (await page.locator(`${card()} .item .value`).allInnerTexts()).map((v) => v.trim());
+    check('the values row shows the attribute now and the values-only entity', /p\/kWh$/.test(values[1]) && /kWh$/.test(values[2]), values.join(' | '));
+    check('energy rates page loads without errors', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
+  {
+    // The editor: a span typed into a list, and single-number attributes under Draw from.
+    const { page, context, errors } = await open('?editor=1&only=16&live=0&delay=50', { width: 1400, height: 1600 });
+    await page.waitForTimeout(1200);
+    const ed = 'chart-explorer-card-editor';
+    await page.locator(`${ed} .row .row-text`).nth(1).click();
+    await page.waitForTimeout(400);
+    const offered = await page.evaluate((sel) => [...document.querySelector(sel).shadowRoot.querySelectorAll('[data-field="attribute_name"] option')].map((o) => o.textContent.trim()), ed);
+    const fields = await page.evaluate((sel) => {
+      const root = document.querySelector(sel).shadowRoot;
+      return { lineStyle: Boolean(root.querySelector('[data-field="line_style"]')), values: Boolean(root.querySelector('.group[data-group="attribute-values"]')), shift: Boolean(root.querySelector('[data-field="time_shift"]')), chart: Boolean(root.querySelector('[data-field="show_in_chart"]')) };
+    }, ed);
+    check('Draw from offers single-number attributes', offered.includes('Attribute: threshold (its history)'), offered.join(' | '));
+    check('a single-number attribute keeps the line settings, without a value list', fields.lineStyle && !fields.values && fields.shift && fields.chart, JSON.stringify(fields));
+    await page.locator(`${ed} .back`).click();
+    await page.waitForTimeout(300);
+    await page.locator(`${ed} [role="tab"]`, { hasText: 'General' }).click();
+    await page.waitForTimeout(300);
+    await page.locator(`${ed} .group[data-group="menu-entries"] .group-head`).click();
+    await page.waitForTimeout(300);
+    const box = page.locator(`${ed} .range-list[data-list="presets"] .span-text`);
+    await box.fill('soon');
+    await page.locator(`${ed} .range-list[data-list="presets"] .add-span-button`).click();
+    const refused = await box.evaluate((el) => el.classList.contains('invalid'));
+    await box.fill('-6h+30h');
+    await page.locator(`${ed} .range-list[data-list="presets"] .add-span-button`).click();
+    await page.waitForTimeout(300);
+    const presets = JSON.parse((await page.locator('#saved-config').textContent()) || '{}').presets ?? [];
+    check('a wrong span is refused', refused);
+    check('a span typed into the menu entries is saved', presets.includes('-6h+30h'), JSON.stringify(presets));
+    check('editor span page loads without errors', errors.length === 0, errors.join(' | '));
+    await context.close();
+  }
   for (const width of [470, 900]) {
     // The quick ranges live in the Presets menu at any width, with the dates on or off.
     const { page, context, errors } = await open(`?only=1&live=0&delay=50&width=${width}`);

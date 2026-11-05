@@ -1,4 +1,4 @@
-# Chart Explorer Card
+# <img src="https://raw.githubusercontent.com/corautem/chart-explorer-card/main/docs/images/icon-128.png" alt="" width="40" height="40" align="top"> Chart Explorer Card
 
 [![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/corautem)
 
@@ -11,7 +11,7 @@ A Home Assistant dashboard card for exploring history: lines, stacked areas, bar
 - **Eight ways to draw history:** lines, stacked areas, bars per hour, day, week or month, pie, donut, heatmaps of numbers or of states, and timeline strips or shaded bands for entities such as a heat pump status or a door.
 - **Ratios such as a heat pump's COP:** one meter's rise divided by others' per bar, with the whole window's ratio above the chart and the ratio so far as a line.
 - **Forecasts and other lists:** the values in a list kept in an attribute, such as a solar forecast or electricity prices, are drawn into the future, each with its own colour, line and fill, and with shaded ranges between them.
-- **Time controls in one row:** previous and next, Now, and a Presets menu with quick ranges from 1 hour to 1 year, presets such as Today or Last month, and a custom range.
+- **Time controls in one row:** previous and next, Now, and a Presets menu with quick ranges from 1 hour to 1 year, presets such as Today or Last month, spans across the past and the future (12 hours back to 48 ahead, or today and the next two days), and a custom range.
 - **Drag to move, pinch to zoom:** the card loads finer data as you zoom in; a double-tap goes back.
 - **Values that follow the cursor:** each entity's value sits above the chart in its colour; tap a name to fade that entity.
 - **Export:** a CSV of exactly what is shown, or a PNG with the title and legend.
@@ -48,7 +48,7 @@ A picture and an example for each: [Chart types](docs/chart-types.md).
 1. Download both files from the [latest release](https://github.com/corautem/chart-explorer-card/releases/latest): `chart-explorer-card.js` (the card) and `chart-explorer-card-editor.js` (the visual editor, loaded only when you edit a card).
 2. Copy them into your Home Assistant configuration folder, in `/config/www/chart-explorer-card/`.
 3. In Home Assistant, open **Settings → Dashboards**, then the three-dot menu → **Resources** → **Add resource**. (The Resources entry appears only with **Advanced mode** on in your user profile.)
-   - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.8.2`
+   - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.8.3`
    - Type: **JavaScript module**
 4. Reload the browser.
 
@@ -141,6 +141,32 @@ entities:
 ```
 
 ![A week of heat pump status, each hour in the colour of its main state](docs/images/heatmap-states.png)
+
+</details>
+
+<details>
+<summary><b>History and a forecast in one window</b></summary>
+
+From 12 hours ago to 48 hours ahead: a battery's recorded level, a planner's forecast from its `results` map, and the forecast made 8 hours earlier moved with `time_shift` to line up. See [History and forecast in one window](docs/chart-types.md#history-and-forecast-in-one-window).
+
+```yaml
+type: custom:chart-explorer-card
+title: Battery forecast
+default_range: -12h+60h
+entities:
+  - entity: sensor.home_battery_stored_energy
+    name: Actual
+    curve: step
+  - entity: planner.battery_stored_energy_forecast
+    attribute:
+      name: results
+      values: [{ key: value, name: Forecast, line_style: dashed }]
+  - entity: planner.battery_stored_energy_forecast_8h_ago
+    name: 8 hours ago
+    time_shift: -8h
+```
+
+![A battery's stored energy: the actual level up to now, the planner's forecast after it, and the forecast made 8 hours earlier, shifted to line up](docs/images/battery-forecast.png)
 
 </details>
 

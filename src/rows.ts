@@ -4,7 +4,52 @@ import type { HassEntity } from './ha-types';
 /** How a row is drawn on a time axis. */
 export type RowKind = 'line' | 'bar' | 'timeline' | 'band';
 
-const NUMERIC_DOMAINS = new Set(['sensor', 'number', 'input_number', 'counter']);
+/**
+ * Home Assistant domains whose states are words: on/off, open/closed, modes
+ * and the like. Other domains, including ones an add-on makes up for its own
+ * entities, are judged like sensors: by unit, state class and state.
+ */
+const TEXT_DOMAINS = new Set([
+  'alarm_control_panel',
+  'automation',
+  'binary_sensor',
+  'button',
+  'calendar',
+  'camera',
+  'climate',
+  'cover',
+  'device_tracker',
+  'event',
+  'fan',
+  'humidifier',
+  'image',
+  'input_boolean',
+  'input_button',
+  'input_datetime',
+  'input_select',
+  'input_text',
+  'lawn_mower',
+  'light',
+  'lock',
+  'media_player',
+  'person',
+  'remote',
+  'scene',
+  'schedule',
+  'script',
+  'select',
+  'siren',
+  'sun',
+  'switch',
+  'text',
+  'timer',
+  'update',
+  'vacuum',
+  'valve',
+  'water_heater',
+  'weather',
+  'zone',
+]);
 
 const isMissing = (state: string) => state === 'unavailable' || state === 'unknown' || state === '';
 
@@ -17,7 +62,7 @@ const isMissing = (state: string) => state === 'unavailable' || state === 'unkno
 export function textStatesFrom(state: HassEntity | undefined): boolean | undefined {
   if (!state) return false;
   const domain = state.entity_id.split('.')[0];
-  if (!NUMERIC_DOMAINS.has(domain)) return true;
+  if (TEXT_DOMAINS.has(domain)) return true;
   const a = state.attributes;
   if (a.device_class === 'enum' || Array.isArray(a.options)) return true;
   if (a.unit_of_measurement || a.state_class) return false;

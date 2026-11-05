@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Chart Explorer Card">
+  <!-- The icon in one colour, without its tile: the line cuts through the solid window with a gap around it. -->
+  <defs>
+    <mask id="cut">
+      <rect width="512" height="512" fill="#fff"/>
+      <path d="M96 320L160 272L224 304L304 176L416 128" fill="none" stroke="#000" stroke-width="64" stroke-linecap="round" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <rect x="160" y="128" width="192" height="224" rx="16" fill="currentColor" mask="url(#cut)"/>
+  <rect x="160" y="384" width="192" height="32" rx="16" fill="currentColor"/>
+  <path d="M96 320L160 272L224 304L304 176L416 128" fill="none" stroke="currentColor" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

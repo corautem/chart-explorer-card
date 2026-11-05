@@ -29,8 +29,8 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | `timeline_row_height` | `22` | Height of each timeline strip in pixels. |
 | `timeline_names` | `true` | The entity name above each strip. |
 | `timeline_labels` | `true` | The state written inside each part of a strip that is wide enough. |
-| `default_range` | `24h` | Window when the card opens: a quick range (`6h`, `7d`) or a preset (`today`, `this_week`, `last_month` …). |
-| `quick_ranges` | `[1h, 6h, 12h, 24h, 7d, 30d, 1y]` | Quick ranges at the top of the Presets menu: lengths (a number followed by `m`, `h`, `d`, `w`, `mo` or `y`, such as `45m` or `6d`) or presets. |
+| `default_range` | `24h` | Window when the card opens: a quick range (`6h`, `7d`), a span (`-12h+60h`, `today+72h`) or a preset (`today`, `this_week`, `last_month` …). See [Windows across the past and the future](usage.md#windows-across-the-past-and-the-future). |
+| `quick_ranges` | `[1h, 6h, 12h, 24h, 7d, 30d, 1y]` | Quick ranges at the top of the Presets menu: lengths (a number followed by `m`, `h`, `d`, `w`, `mo` or `y`, such as `45m` or `6d`), spans (`-12h+60h`) or presets. |
 | `unused_quick_ranges`, `unused_presets` | none | Lengths you added in the editor and switched off; the editor keeps them so you can switch them on again. The card ignores them. |
 | `presets` | all nine presets | Menu entries, the same kinds as `quick_ranges`. A length with a plus sign, such as `+1d` ("Next day"), starts now and runs into the future, for forecasts. The presets are `today`, `yesterday`, `tomorrow`, `this_week`, `last_week`, `this_month`, `last_month`, `this_year` and `last_year`. |
 | `toolbar_position` | `top` | `top`, `bottom` or `off`. |
@@ -86,7 +86,7 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | `divide_by` | none | A meter, or a list of meters added together, whose rise divides this meter's rise: a ratio such as a heat pump's COP. See [Ratios](chart-types.md#ratios-such-as-a-heat-pumps-cop). |
 | `add` | none | With `divide_by`: further meters whose rise is added to this one's before dividing. |
 | `min_divisor` | 50 Wh for energy meters | With `divide_by`: the smallest divisor rise, in the first divisor's unit, for which a period shows a ratio. Other units count anything above zero. |
-| `attribute` | none | Draw values from a list kept in an attribute instead of the recorded history, such as a solar forecast: `{ name, values }`, with one entry per value to draw (`key`, and optionally `name`, `color`, `line_style`, `fill`, `fill_opacity`, `show_in_header`). See [Forecasts and other lists](chart-types.md#forecasts-and-other-lists-from-attributes). |
+| `attribute` | none | Draw values from a list kept in an attribute instead of the recorded history, such as a solar forecast: `{ name, values }`, with one entry per value to draw (`key`, and optionally `name`, `color`, `line_style`, `fill`, `fill_opacity`, `show_in_header`). An attribute that holds a single number, such as `attribute: threshold`, is drawn from its recorded history instead. See [Forecasts and other lists](chart-types.md#forecasts-and-other-lists-from-attributes). |
 | `type` | automatic | How the entity is drawn: `line`, `bar`, `timeline` or `band`. Automatic draws numbers as lines (bars in a bar chart) and text or on/off states as a timeline strip. |
 | `state_colors` | automatic | Colours for states of a timeline or band, such as `{ standby: "#9e9e9e", defrost: "#3987e5" }`. |
 | `on_states` | all but quiet states | For bands: the states that shade the chart, such as `[heat, defrost]`. |
@@ -102,6 +102,8 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | `y_axis` | by unit | `left`, `right`, or any other name for a separate unlabelled scale. By default the first unit uses the left axis, the second the right, and further units get their own scale. Units of one family, such as W and kW, share a scale in the first one's unit; the others are converted for drawing. |
 | `decimals` | the entity's display precision; 2 for a ratio | Decimal places for the value. |
 | `show_in_header` | `true` | `false` hides the entity from the values row; its line stays. |
+| `show_in_chart` | `true` | `false` keeps the entity in the values row only, with its current value: no line, no scale of its own, nothing loaded. For totals or a forecast's remaining energy shown beside lines in another unit. |
+| `time_shift` | none | Moves the entity in time, as apexcharts-card's `offset` does: `-8h` draws, at each moment, the value from 8 hours earlier, so its points move 8 hours later; `+30m` moves them 30 minutes earlier. Lines, bars, lists and the values row follow, and so does the CSV. Not with `divide_by`. |
 | `show_unit` | `true` | `false` leaves the unit off the value above the chart and in the tooltip. |
 | `show_name` | `true` | `false` shows this entity's value or state without its name. |
 | `faded` | `false` | Start with the line faded (YAML only). |

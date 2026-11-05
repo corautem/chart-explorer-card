@@ -57,6 +57,13 @@ export interface EntityConfigInput {
   entity: string;
   /** Multiplies every value, for a unit the card cannot convert, such as 1000 to show kW as W. */
   multiply?: number;
+  /**
+   * Moves the entity in time, as apexcharts-card's offset does: -8h draws, at
+   * each moment, the value from 8 hours earlier, so its points move 8 hours later.
+   */
+  time_shift?: string;
+  /** False keeps the entity in the values row only: no line, no scale. */
+  show_in_chart?: boolean;
   /** A meter, or meters added together, whose rise divides this meter's rise: a ratio such as a heat pump's COP. */
   divide_by?: string | string[];
   /** Further meters whose rise is added to this one's before dividing. */
@@ -187,6 +194,10 @@ export interface EntityConfig {
   ratio?: RatioSource;
   /** What every value is multiplied by; absent for 1. */
   multiply?: number;
+  /** Milliseconds, signed as written: -8h is -28,800,000, and draws each value 8 hours after it was recorded. */
+  timeShift?: number;
+  /** False: in the values row only, with its current value; nothing drawn, no scale. */
+  showInChart: boolean;
   /** For a value from an attribute: the key whose value the fill reaches up to, a shaded range. */
   fillTo?: string;
   /** For the second and later values of one entity: how far their default colour moves towards grey. */
@@ -294,7 +305,7 @@ export function normalizeConfig(input: unknown): CardConfig {
   const defaultRange = parseRangeSpec(String(c.default_range ?? '24h'));
   if (!defaultRange) {
     throw new Error(
-      `default_range: "${c.default_range}" is unknown. Use a length such as 24h or a preset such as today.`,
+      `default_range: "${c.default_range}" is unknown. Use a length such as 24h, a preset such as today, or a span such as -12h+60h (12 hours back, 60 hours long) or today+72h.`,
     );
   }
 
@@ -449,6 +460,8 @@ function normalizeRow(e: EntityConfigInput, index: number): EntityConfig {
     entity: e.entity,
     ratio,
     multiply: multiplier(e.multiply, `${where} multiply`),
+    timeShift: timeShift(e, where),
+    showInChart: bool(e.show_in_chart, `${where} show_in_chart`, true),
     name: e.name === undefined ? undefined : String(e.name),
     color: e.color === undefined ? undefined : String(e.color),
     unit: e.unit === undefined ? undefined : String(e.unit),
@@ -468,6 +481,18 @@ function normalizeRow(e: EntityConfigInput, index: number): EntityConfig {
     stateColors: stateColors(e.state_colors, `${where} state_colors`),
     onStates: e.on_states === undefined ? undefined : stringList(e.on_states, `${where} on_states`),
   };
+}
+
+const SHIFT_UNITS: Record<string, number> = { m: 60_000, h: 3_600_000, d: 86_400_000, w: 604_800_000 };
+
+function timeShift(e: EntityConfigInput, where: string): number | undefined {
+  const value = e.time_shift;
+  if (value === undefined || value === null || value === '') return undefined;
+  const match = /^\s*([+-])?\s*(\d+(?:\.\d+)?)\s*(m|h|d|w)\s*$/.exec(String(value));
+  if (!match) throw new Error(`${where} time_shift must be a length with a sign, such as -8h or +30m.`);
+  if (e.divide_by) throw new Error(`${where}: time_shift does not work with divide_by.`);
+  const ms = Number(match[2]) * SHIFT_UNITS[match[3]] * (match[1] === '-' ? -1 : 1);
+  return ms === 0 ? undefined : ms;
 }
 
 function multiplier(value: unknown, name: string): number | undefined {
@@ -559,8 +584,8 @@ function rangeItems(list: unknown, name: string): RangeItem[] {
     const item = parseRangeItem(String(text));
     if (!item) {
       throw new Error(
-        `${name}: "${text}" is not a length or a preset. Use a number followed by m, h, d, w, mo or y ` +
-          `(such as 45m or 6d), or a preset such as today or last_week.`,
+        `${name}: "${text}" is not a length, a span or a preset. Use a number followed by m, h, d, w, mo or y ` +
+          `(such as 45m or 6d), a span such as -12h+60h or today+72h, or a preset such as today or last_week.`,
       );
     }
     return item;

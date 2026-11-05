@@ -184,6 +184,31 @@ CONFIGS.push(
       },
     ],
   },
+  {
+    type: 'custom:chart-explorer-card',
+    title: 'Battery forecast',
+    default_range: '-12h+60h',
+    presets: ['today', 'tomorrow', '-12h+60h', '-36h+48h', 'today+48h'],
+    entities: [
+      { entity: 'sensor.demo_battery_stored_energy', name: 'Actual', curve: 'step' },
+      {
+        entity: 'planner.demo_battery_forecast',
+        name: 'Forecast',
+        attribute: { name: 'results', values: [{ key: 'value', name: 'Forecast', line_style: 'dashed' }] },
+      },
+      { entity: 'planner.demo_battery_forecast_8h_ago', name: '8 hours ago', time_shift: '-8h', line_style: 'dotted' },
+    ],
+  },
+  {
+    type: 'custom:chart-explorer-card',
+    title: 'Energy rates',
+    default_range: 'today+72h',
+    entities: [
+      { entity: 'planner.demo_import_rate', name: 'Import rate', curve: 'step', attribute: { name: 'rates', values: [{ key: 'value', name: 'Import rate' }] } },
+      { entity: 'planner.demo_import_rate', name: 'Low threshold', attribute: 'threshold', curve: 'step', line_style: 'dashed' },
+      { entity: 'sensor.demo_energy', name: 'Energy so far', show_in_chart: false },
+    ],
+  },
 );
 
 if (params.get('perf')) {

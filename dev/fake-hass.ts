@@ -71,6 +71,35 @@ const heatDelivered = (electricityWh: (t: number) => number, cop: number, drift:
 const spaceHeatingWh = runningTotal(600, 2);
 const hotWaterWh = runningTotal(150, 7);
 
+/** A home battery's stored energy in kWh: charged overnight and by the sun, used in the evening. */
+const batteryLevel = (t: number) => {
+  const d = new Date(t);
+  const h = d.getHours() + d.getMinutes() / 60;
+  const daily = 5 + 3.2 * Math.sin((2 * Math.PI * (h - 8)) / 24) + 0.8 * Math.sin((4 * Math.PI * (h - 3)) / 24);
+  return Math.max(0.5, Math.min(9.5, daily + 0.4 * noise(Math.floor(t / (3 * HOUR)), 31)));
+};
+const HALF_HOUR = 30 * MINUTE;
+/** A planner's forecast as a map of ISO times to numbers, from `from` for `hours`, every half hour. */
+const timeMap = (from: number, hours: number, value: (t: number) => number) =>
+  Object.fromEntries(
+    Array.from({ length: (hours * HOUR) / HALF_HOUR }, (_, k) => {
+      const t = aligned(from, HALF_HOUR) + k * HALF_HOUR;
+      return [new Date(t).toISOString(), Math.round(value(t) * 100) / 100];
+    }),
+  );
+/** An import rate in p/kWh: cheap at night, dear in the early evening. */
+const importRate = (t: number) => {
+  const d = new Date(t);
+  const h = d.getHours() + d.getMinutes() / 60;
+  if (h >= 0.5 && h < 4.5) return 7.5;
+  return h >= 16 && h < 19 ? 32.4 : 24.6;
+};
+const localMidnight = (t: number) => {
+  const d = new Date(t);
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+
 /** A heat pump's status: standby, heating, hot water and a short defrost now and then. */
 const status = (t: number): string => {
   const slot = Math.floor(t / (20 * MINUTE));
@@ -238,6 +267,48 @@ export const ENTITIES: FakeEntity[] = [
     value: (t) => Math.round(hotWaterWh(t)),
   },
   {
+    id: 'sensor.demo_battery_stored_energy',
+    name: 'Demo battery stored energy',
+    unit: 'kWh',
+    stateClass: 'measurement',
+    deviceClass: 'energy_storage',
+    interval: 10 * MINUTE,
+    precision: 2,
+    value: batteryLevel,
+  },
+  {
+    // A planner's entity, in a domain of its own: its state is now, its results attribute the forecast.
+    id: 'planner.demo_battery_forecast',
+    name: 'Demo battery forecast',
+    unit: 'kWh',
+    interval: HALF_HOUR,
+    precision: 2,
+    value: batteryLevel,
+    extra: (now) => ({ results: timeMap(now, 48, (t) => batteryLevel(t) + 0.6 * Math.sin(t / (7 * HOUR))) }),
+  },
+  {
+    // The forecast made 8 hours earlier: at each moment, the level expected 8 hours later.
+    id: 'planner.demo_battery_forecast_8h_ago',
+    name: 'Demo battery forecast 8 hours ago',
+    unit: 'kWh',
+    interval: HALF_HOUR,
+    precision: 2,
+    value: (t) => batteryLevel(t + 8 * HOUR) + 0.8 * noise(Math.floor(t / HALF_HOUR), 33),
+  },
+  {
+    // A rate with its schedule as a map, and a threshold that the planner sets once a day.
+    id: 'planner.demo_import_rate',
+    name: 'Demo import rate',
+    unit: 'p/kWh',
+    interval: HALF_HOUR,
+    precision: 2,
+    value: importRate,
+    extra: (now) => ({
+      rates: timeMap(localMidnight(now), 72, importRate),
+      threshold: Math.round((12 + 4 * Math.sin(localMidnight(now) / DAY)) * 100) / 100,
+    }),
+  },
+  {
     id: 'sensor.demo_solar_power',
     name: 'Demo solar power',
     unit: 'kW',
@@ -303,19 +374,23 @@ function aligned(t: number, interval: number): number {
   return Math.floor(t / interval) * interval;
 }
 
+function attributesAt(entity: FakeEntity, t: number): Record<string, unknown> {
+  return {
+    friendly_name: entity.name,
+    ...(entity.unit ? { unit_of_measurement: entity.unit } : {}),
+    ...(entity.stateClass ? { state_class: entity.stateClass } : {}),
+    ...(entity.deviceClass ? { device_class: entity.deviceClass } : {}),
+    ...(entity.options ? { options: entity.options } : {}),
+    ...(entity.extra ? entity.extra(t) : {}),
+  };
+}
+
 function stateObject(entity: FakeEntity, now: number): HassEntity {
   const changed = new Date(aligned(now, entity.interval)).toISOString();
   return {
     entity_id: entity.id,
     state: stateText(entity, now),
-    attributes: {
-      friendly_name: entity.name,
-      ...(entity.unit ? { unit_of_measurement: entity.unit } : {}),
-      ...(entity.stateClass ? { state_class: entity.stateClass } : {}),
-      ...(entity.deviceClass ? { device_class: entity.deviceClass } : {}),
-      ...(entity.options ? { options: entity.options } : {}),
-      ...(entity.extra ? entity.extra(now) : {}),
-    },
+    attributes: attributesAt(entity, now),
     last_changed: changed,
     last_updated: changed,
   };
@@ -325,17 +400,20 @@ function history(msg: Record<string, unknown>) {
   const start = Date.parse(String(msg.start_time));
   const end = Date.parse(String(msg.end_time));
   const retention = Date.now() - RETENTION_DAYS * DAY;
-  const out: Record<string, { s: string; lu: number }[]> = {};
+  // Asked for attributes, every step comes with them, as an attribute can change while the state does not.
+  const withAttributes = msg.no_attributes === false;
+  const out: Record<string, { s: string; lu: number; a?: Record<string, unknown> }[]> = {};
   for (const id of msg.entity_ids as string[]) {
     const entity = ENTITIES.find((e) => e.id === id);
     if (!entity) continue;
-    const rows: { s: string; lu: number }[] = [];
+    const rows: { s: string; lu: number; a?: Record<string, unknown> }[] = [];
     const from = Math.max(start, retention);
+    const row = (t: number, time: number) => ({ s: stateText(entity, t), lu: time / 1000, ...(withAttributes ? { a: attributesAt(entity, t) } : {}) });
     if (from < end) {
-      rows.push({ s: stateText(entity, from), lu: aligned(from, entity.interval) / 1000 });
+      rows.push(row(from, aligned(from, entity.interval)));
       for (let t = aligned(from, entity.interval) + entity.interval; t < end; t += entity.interval) {
         const s = stateText(entity, t);
-        if (s !== rows[rows.length - 1].s) rows.push({ s, lu: t / 1000 });
+        if (withAttributes || s !== rows[rows.length - 1].s) rows.push(row(t, t));
       }
     }
     out[id] = rows;

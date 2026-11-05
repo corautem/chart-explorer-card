@@ -206,6 +206,7 @@ describe('editor layout', () => {
     schemas.entitySchema('line', 'line', [], { attributes: ['f'], keys: ['t', 'a'], chosen: 'f', showTime: true }),
     schemas.attributeValuesSchema(['a', 'b'], { 'on:a': true, 'fill:a': 'b', 'on:b': true }),
     schemas.entitySchema('bar', 'bar', [], undefined, true),
+    schemas.entitySchema('line', 'line', [], { attributes: ['rates'], numbers: ['threshold'], keys: [], chosen: 'threshold', history: true }),
   ] as Field[][];
 
   it('pairs only fields of the same kind, and never switches or sliders', () => {

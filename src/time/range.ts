@@ -1,5 +1,6 @@
 import {
   MINUTE,
+  addMonthsClamped,
   approximateMs,
   parseQuickRange,
   quickFromMinutes,
@@ -25,15 +26,28 @@ export type PresetId = (typeof PRESET_IDS)[number];
 export type CalendarUnit = 'day' | 'week' | 'month' | 'year';
 
 /**
+ * A window that spans the past and the future: a start and a length.
+ * `-12h+60h` starts 12 hours ago and runs 60 hours (to 48 hours ahead);
+ * `today+72h` starts at midnight and runs three days.
+ */
+export interface Span {
+  id: string;
+  /** How far before now the window starts, or the calendar period it starts with. */
+  start: { kind: 'offset'; back: QuickRange } | { kind: 'preset'; id: PresetId };
+  length: QuickRange;
+}
+
+/**
  * What the user picked. The actual start and end follow from it and the
  * current time, so a rolling window keeps sliding and "this week" stays this week.
  */
 export type RangeSpec =
   | { kind: 'rolling'; quick: QuickRange }
   | { kind: 'calendar'; unit: CalendarUnit; offset: number }
-  // `rolling` remembers the quick range a stepped-back window came from,
+  | { kind: 'span'; span: Span }
+  // `rolling` and `span` remember the window a stepped one came from,
   // so stepping forward onto the present makes it live again.
-  | { kind: 'fixed'; start: number; end: number; rolling?: QuickRange };
+  | { kind: 'fixed'; start: number; end: number; rolling?: QuickRange; span?: Span };
 
 /** Milliseconds since the epoch; `end` is exclusive. */
 export interface TimeWindow {
@@ -69,28 +83,49 @@ export function presetOf(spec: RangeSpec): PresetId | undefined {
   );
 }
 
-/** An entry in the toolbar buttons or the menu: a rolling length or a calendar preset. */
-export type RangeItem = { kind: 'length'; quick: QuickRange } | { kind: 'preset'; id: PresetId };
+/** An entry in the quick ranges or the menu: a rolling length, a span or a calendar preset. */
+export type RangeItem =
+  | { kind: 'length'; quick: QuickRange }
+  | { kind: 'span'; span: Span }
+  | { kind: 'preset'; id: PresetId };
+
+/** Parses `-12h+60h` (start 12 hours ago, 60 hours long) or `today+72h` (start at midnight). */
+export function parseSpan(text: string): Span | undefined {
+  const match = /^\s*(?:-\s*(\d+\s*(?:mo|m|h|d|w|y))|([a-z_]+))\s*\+\s*(\d+\s*(?:mo|m|h|d|w|y))\s*$/.exec(text);
+  if (!match) return undefined;
+  const length = parseQuickRange(match[3]);
+  if (!length) return undefined;
+  if (match[2]) {
+    if (!isPresetId(match[2])) return undefined;
+    return { id: `${match[2]}+${length.id}`, start: { kind: 'preset', id: match[2] }, length };
+  }
+  const back = parseQuickRange(match[1]);
+  return back ? { id: `-${back.id}+${length.id}`, start: { kind: 'offset', back }, length } : undefined;
+}
 
 export function parseRangeItem(text: string): RangeItem | undefined {
   const trimmed = text.trim();
   if (isPresetId(trimmed)) return { kind: 'preset', id: trimmed };
+  const span = parseSpan(trimmed);
+  if (span) return { kind: 'span', span };
   const quick = parseQuickRange(trimmed);
   return quick ? { kind: 'length', quick } : undefined;
 }
 
 export function rangeItemId(item: RangeItem): string {
-  return item.kind === 'preset' ? item.id : item.quick.id;
+  return item.kind === 'preset' ? item.id : item.kind === 'span' ? item.span.id : item.quick.id;
 }
 
 export function rangeItemSpec(item: RangeItem): RangeSpec {
-  return item.kind === 'preset' ? presetSpec(item.id) : { kind: 'rolling', quick: item.quick };
+  if (item.kind === 'preset') return presetSpec(item.id);
+  return item.kind === 'span' ? { kind: 'span', span: item.span } : { kind: 'rolling', quick: item.quick };
 }
 
 /** True when the shown window is this entry (a stepped "this week" is not). */
 export function rangeItemActive(item: RangeItem, spec: RangeSpec | undefined): boolean {
   if (!spec) return false;
   if (item.kind === 'preset') return presetOf(spec) === item.id;
+  if (item.kind === 'span') return spec.kind === 'span' && spec.span.id === item.span.id;
   return spec.kind === 'rolling' && sameLength(spec.quick, item.quick);
 }
 
@@ -104,6 +139,7 @@ export function sortRangeItems(items: RangeItem[]): RangeItem[] {
     return true;
   });
   const lengths = unique.filter((i): i is Extract<RangeItem, { kind: 'length' }> => i.kind === 'length');
+  const spans = unique.filter((i): i is Extract<RangeItem, { kind: 'span' }> => i.kind === 'span');
   const presets = unique.filter((i): i is Extract<RangeItem, { kind: 'preset' }> => i.kind === 'preset');
   // Past lengths first, then the ones running into the future, each shortest first.
   lengths.sort(
@@ -112,15 +148,13 @@ export function sortRangeItems(items: RangeItem[]): RangeItem[] {
       approximateMs(a.quick) - approximateMs(b.quick),
   );
   presets.sort((a, b) => PRESET_IDS.indexOf(a.id) - PRESET_IDS.indexOf(b.id));
-  return [...lengths, ...presets];
+  return [...lengths, ...spans, ...presets];
 }
 
-/** Parses a `default_range` value: a preset id or a quick range such as `24h`. */
+/** Parses a `default_range` value: a preset id, a span such as `-12h+60h`, or a quick range such as `24h`. */
 export function parseRangeSpec(text: string): RangeSpec | undefined {
-  const trimmed = text.trim();
-  if (isPresetId(trimmed)) return presetSpec(trimmed);
-  const quick = parseQuickRange(trimmed);
-  return quick ? { kind: 'rolling', quick } : undefined;
+  const item = parseRangeItem(text);
+  return item ? rangeItemSpec(item) : undefined;
 }
 
 /** Local-time start of the day, week, month or year containing `ms`. */
@@ -147,8 +181,26 @@ export function addUnits(ms: number, unit: CalendarUnit, count: number): number 
   return date.getTime();
 }
 
+/**
+ * The end of a span. From a calendar start, whole days (72h as well as 3d)
+ * count by the calendar, so the window still ends at midnight across a clock change.
+ */
+function spanEnd(start: number, length: QuickRange, calendar: boolean): number {
+  if (calendar && length.unit === 'h' && length.amount % 24 === 0) return addUnits(start, 'day', length.amount / 24);
+  if (calendar && length.unit === 'd') return addUnits(start, 'day', length.amount);
+  if (calendar && length.unit === 'w') return addUnits(start, 'week', length.amount);
+  if (length.unit === 'mo' || length.unit === 'y') return addMonthsClamped(start, (length.unit === 'y' ? 12 : 1) * length.amount);
+  return rollingEnd(start, length);
+}
+
 export function resolveWindow(spec: RangeSpec, now: number, weekStart: number): TimeWindow {
   switch (spec.kind) {
+    case 'span': {
+      const { start: from, length } = spec.span;
+      const start =
+        from.kind === 'offset' ? rollingStart(now, from.back) : resolveWindow(presetSpec(from.id), now, weekStart).start;
+      return { start, end: spanEnd(start, length, from.kind === 'preset') };
+    }
     case 'rolling':
       return spec.quick.forward
         ? { start: now, end: rollingEnd(now, spec.quick) }
@@ -177,13 +229,15 @@ export function stepSpec(
   const length = current.end - current.start;
   const start = current.start + direction * length;
   const end = current.end + direction * length;
-  const origin = spec.kind === 'rolling' ? spec.quick : spec.rolling;
+  const origin = spec.kind === 'rolling' ? spec.quick : spec.kind === 'fixed' ? spec.rolling : undefined;
+  const span = spec.kind === 'span' ? spec.span : spec.kind === 'fixed' ? spec.span : undefined;
   // Landing where the live window is (within half a window) turns a stepped window live again.
-  if (origin && spec.kind === 'fixed') {
-    const live = resolveWindow({ kind: 'rolling', quick: origin }, now, weekStart);
-    if (Math.abs(start - live.start) < length / 2) return { kind: 'rolling', quick: origin };
+  if (spec.kind === 'fixed' && (origin || span)) {
+    const liveSpec: RangeSpec = span ? { kind: 'span', span } : { kind: 'rolling', quick: origin as QuickRange };
+    const live = resolveWindow(liveSpec, now, weekStart);
+    if (Math.abs(start - live.start) < length / 2) return liveSpec;
   }
-  return { kind: 'fixed', start, end, rolling: origin };
+  return { kind: 'fixed', start, end, rolling: origin, span };
 }
 
 /** The "Now" button: the same kind of window, brought to the present. */
@@ -193,7 +247,10 @@ export function nowSpec(spec: RangeSpec): RangeSpec {
       return spec;
     case 'calendar':
       return { ...spec, offset: 0 };
+    case 'span':
+      return spec;
     case 'fixed': {
+      if (spec.span) return { kind: 'span', span: spec.span };
       if (spec.rolling) return { kind: 'rolling', quick: spec.rolling };
       const minutes = Math.max(1, Math.round((spec.end - spec.start) / MINUTE));
       return { kind: 'rolling', quick: quickFromMinutes(minutes) };
@@ -203,7 +260,22 @@ export function nowSpec(spec: RangeSpec): RangeSpec {
 
 /** Calendar windows end at midnight; the label shows the last minute instead (23:59). */
 export function labelEndIsInclusive(spec: RangeSpec): boolean {
-  return spec.kind === 'calendar';
+  return spec.kind === 'calendar' || (spec.kind === 'span' && spec.span.start.kind === 'preset' && calendarLength(spec.span.length));
+}
+
+/** Whether a length is whole days, weeks, months or years, so a span from midnight ends at midnight. */
+function calendarLength(length: QuickRange): boolean {
+  return length.unit !== 'm' && (length.unit !== 'h' || length.amount % 24 === 0);
+}
+
+/** Whether the window follows the calendar (a new day moves it) rather than sliding with the clock. */
+export function followsCalendar(spec: RangeSpec): boolean {
+  return spec.kind === 'calendar' || (spec.kind === 'span' && spec.span.start.kind === 'preset');
+}
+
+/** Whether the window slides with the clock: rolling lengths and spans that start some time before now. */
+export function slides(spec: RangeSpec): boolean {
+  return spec.kind === 'rolling' || (spec.kind === 'span' && spec.span.start.kind === 'offset');
 }
 
 export function containsNow(window: TimeWindow, now: number): boolean {

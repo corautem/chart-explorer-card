@@ -26,6 +26,19 @@ On a narrow card the toolbar stays on one row: first the range label goes onto t
 
 Weeks start on the day set in your Home Assistant profile (**First day of the week**). With "Auto", the card follows the browser's language settings.
 
+### Windows across the past and the future
+
+A span starts at some time and runs for a length, so one window can hold the recorded history up to now and a forecast after it:
+
+| Span | Window | In the menu |
+|---|---|---|
+| `-12h+60h` | from 12 hours ago, 60 hours long (to 48 hours ahead) | 12 hours ago to 2 days ahead |
+| `-36h+48h` | from 36 hours ago to 12 hours ahead | 36 hours ago to 12 hours ahead |
+| `today+48h` | today and tomorrow, from midnight | Today for 2 days |
+| `today+72h` | today and the next two days | Today for 3 days |
+
+Spans work in `default_range`, `quick_ranges` and `presets`; in the editor, type one into the box under either list. A span that starts some time ago slides with the clock, and one that starts with `today` moves on at midnight. A span from midnight that lasts whole days ends at midnight, also across a clock change. History is drawn up to now, lists from attributes (forecasts) over the whole window, and the now line where it falls. The arrows step by the window's length; Now returns to the span.
+
 ## Values above the chart
 
 Each entity shows its value in its line's colour, with its name underneath (or above, left or right of it, with `value_position`). An entity with states shows the state as Home Assistant writes it, such as "Standby", in that state's colour.
@@ -38,6 +51,7 @@ Each entity shows its value in its line's colour, with its name underneath (or a
 
 - In a bar chart a meter shows the total of the bars on screen; while you hover, the bar under the cursor. In a pie, each value shows its share. Over a heatmap, the value is that of the hour under the cursor.
 - `show_names: false` (or `show_name: false` on one entity) shows the values without names; hovering a value then shows whose it is. Without its name, an entity cannot be faded by tapping.
+- `show_in_chart: false` keeps an entity in the values row only, with its current value, also while you hover: nothing is drawn or loaded for it, and its unit adds no scale. It suits totals in kWh beside power lines in kW.
 
 ## Moving and zooming
 

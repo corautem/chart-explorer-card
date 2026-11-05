@@ -212,6 +212,62 @@ Line type None and a fill down to zero draw each value as a see-through area, wi
           fill_opacity: 0.35
 ```
 
+### History and forecast in one window
+
+![A battery's stored energy: the actual level up to now, the planner's forecast after it, and the forecast made 8 hours earlier, shifted to line up](images/battery-forecast.png)
+
+A span such as `-12h+60h` covers 12 hours of history and 48 hours of forecast. Here the actual level is the battery's recorded history, the forecast is a planner's map of times to numbers, and the third line is the forecast made 8 hours earlier: an entity whose state at each moment was the level expected 8 hours later, moved with `time_shift: -8h` so that it lines up with the actual level.
+
+```yaml
+type: custom:chart-explorer-card
+title: Battery forecast
+default_range: -12h+60h
+entities:
+  - entity: sensor.home_battery_stored_energy
+    name: Actual
+    curve: step
+  - entity: planner.battery_stored_energy_forecast
+    attribute:
+      name: results
+      values:
+        - key: value
+          name: Forecast
+          line_style: dashed
+  - entity: planner.battery_stored_energy_forecast_8h_ago
+    name: 8 hours ago
+    time_shift: -8h
+```
+
+`time_shift` works as apexcharts-card's `offset` does: `-8h` draws, at each moment, the value from 8 hours earlier, so the points move 8 hours later; `+30m` moves them 30 minutes earlier. The values row shows the value drawn at the present, and while you hover the one at the cursor; the CSV writes the shifted times.
+
+### A single number from its history
+
+![Today and the next two days of import rates from a planner's map, the low threshold drawn from its history up to now, and an energy total in the values row only](images/energy-rates.png)
+
+An attribute that holds a single number, such as a planner's `threshold`, is drawn from its recorded history, with its current value in the values row. It takes the entity's unit unless `unit` sets one.
+
+```yaml
+type: custom:chart-explorer-card
+title: Energy rates
+default_range: today+72h
+entities:
+  - entity: planner.import_rate
+    curve: step
+    attribute:
+      name: rates
+      values: [{ key: value, name: Import rate }]
+  - entity: planner.import_rate
+    name: Low threshold
+    attribute: threshold
+    curve: step
+    line_style: dashed
+  - entity: sensor.energy_today
+    name: Energy so far
+    show_in_chart: false
+```
+
+Statistics do not cover attributes, and Home Assistant sends every attribute of the entity with each change, so an attribute's history comes from raw history and reaches back at most `raw_max_hours` (24 hours unless changed). Long attribute lists on the same entity make that history large; the card asks for it only for these rows. The last entity, with `show_in_chart: false`, shows its current value in the values row without a line or a scale.
+
 ## Entities with states
 
 ![Two entities with states drawn as coloured strips](images/timeline.png)

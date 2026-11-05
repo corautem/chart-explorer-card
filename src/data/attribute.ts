@@ -108,7 +108,7 @@ function isPairList(raw: unknown): boolean {
 }
 
 /** One number per time, without keys of its own: a map of times or a list of pairs. */
-const isSingleValue = (raw: unknown) => isTimeMap(raw) || isPairList(raw);
+export const isSingleValue = (raw: unknown) => isTimeMap(raw) || isPairList(raw);
 
 /** Attributes of an entity that hold such a list (items, pairs or a map of times), for the editor to offer. */
 export function listAttributes(attributes: Record<string, unknown> | undefined): string[] {
@@ -153,7 +153,24 @@ export function automaticValueKey(raw: unknown): string | undefined {
   return first ? guessValueKey(first, TIME_KEYS.find((key) => key in first)) : undefined;
 }
 
-/** A unit for a list kept by an energy sensor: forecast slots hold power, so kWh suggests kW. */
-export function suggestedListUnit(entityUnit: unknown): string {
+/**
+ * The unit of a list when none is set. A map of times or pairs (a planner's
+ * results) holds the entity's own quantity, so it takes the entity's unit.
+ * Forecast items kept by an energy sensor (Solcast's slots) hold power, so kWh suggests kW.
+ */
+export function suggestedListUnit(entityUnit: unknown, raw?: unknown): string {
+  if (raw !== undefined && isSingleValue(raw)) return entityUnit === undefined || entityUnit === null ? '' : String(entityUnit);
   return ({ Wh: 'W', kWh: 'kW', MWh: 'MW' } as Record<string, string>)[String(entityUnit)] ?? '';
+}
+
+/** Whether an attribute holds a list (items, pairs or a map of times) rather than a single value. */
+export function isListValue(raw: unknown): boolean {
+  return Array.isArray(raw) || (Boolean(raw) && typeof raw === 'object');
+}
+
+/** Attributes that hold a single number, such as a threshold, whose recorded history can be drawn. */
+export function numberAttributes(attributes: Record<string, unknown> | undefined): string[] {
+  return Object.entries(attributes ?? {})
+    .filter(([key, value]) => key !== 'supported_features' && (typeof value === 'number' || (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)))))
+    .map(([key]) => key);
 }

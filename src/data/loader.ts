@@ -1,8 +1,8 @@
 import type { DataSettings, EntityConfig, StatisticKind } from '../config';
 import type { HomeAssistant } from '../ha-types';
-import { MINUTE } from '../time/duration';
+import { HOUR, MINUTE } from '../time/duration';
 import type { TimeWindow } from '../time/range';
-import { fetchHistory } from './history';
+import { fetchAttributeHistory, fetchHistory, type AttributeRequest } from './history';
 import { PERIOD_MS, chooseResolution } from './resolution';
 import { concatSeries, emptySeries, indexAtOrBefore } from './series';
 import {
@@ -94,6 +94,8 @@ export interface LoadInput {
   bucketPeriod?: BucketPeriod;
   /** First day of the week (0 Sunday), for weekly periods. */
   weekStart?: number;
+  /** Numeric attributes drawn from their recorded history (raw history only, up to raw_max_hours). */
+  attributeHistory?: AttributeRequest[];
 }
 
 /** Data that starts later than the window does: older history is gone, or never existed. */
@@ -103,7 +105,7 @@ export async function loadWindow(input: LoadInput): Promise<LoadedData> {
   const { hass, window, now, settings, meta } = input;
   const textIds = new Set(input.textIds ?? []);
   const ids = [...new Set([...input.entityIds, ...textIds])];
-  const resolution = input.resolution ?? chooseResolution(window, settings, meta.rawSince(now));
+  const resolution = input.resolution ?? chooseResolution(window, settings, meta.rawSince(now), now);
   const until = Math.min(window.end, now);
   const entities = new Map<string, EntityData>();
   const plain = (id: string, raw?: Series): EntityData => ({
@@ -111,6 +113,11 @@ export async function loadWindow(input: LoadInput): Promise<LoadedData> {
     raw: raw ?? (textIds.has(id) ? { t: [], v: [], s: [] } : emptySeries()),
     meanType: true,
   });
+  // Attributes come only from raw history, and only for the last raw_max_hours: Home Assistant sends every attribute with each change.
+  const attributeUntil = Math.min(window.end, now);
+  const attributesLoading = input.attributeHistory?.length
+    ? fetchAttributeHistory(hass, input.attributeHistory, Math.max(window.start, attributeUntil - settings.rawMaxHours * HOUR), attributeUntil)
+    : undefined;
   const bucketsLoading =
     input.bucketIds?.length && input.bucketPeriod
       ? loadBuckets(hass, input.bucketIds, window, now, input.bucketPeriod, meta, input.weekStart)
@@ -204,12 +211,49 @@ export async function loadWindow(input: LoadInput): Promise<LoadedData> {
   }
 
   const buckets = bucketsLoading ? await bucketsLoading : undefined;
+  const attributes = attributesLoading ? await attributesLoading : undefined;
   for (const id of ids) {
     const data = entities.get(id) as EntityData;
     if (data.raw.t.length || data.stats?.t.length || buckets?.entities.get(id)?.buckets.t.length) continue;
     data.error = hass.states[id] ? 'no_history' : 'not_found';
   }
-  return { window, resolution, loadedAt: now, entities, buckets };
+  return { window, resolution, loadedAt: now, entities, buckets, attributes };
+}
+
+/** The key a row's data is kept under: its entity, and the time shift when it has one. */
+export function entityKey(row: { entity: string; timeShift?: number }): string {
+  return row.timeShift ? `${row.entity}@${row.timeShift}` : row.entity;
+}
+
+/**
+ * Data loaded for a window moved by `shift` (8 hours earlier for -8h), brought
+ * back onto the shown window: every time moves by -shift, and the entities are
+ * kept under their shifted keys, so one entity can be drawn shifted and not.
+ */
+export function mergeShifted(into: LoadedData, shifted: LoadedData, shift: number): void {
+  const by = -shift;
+  const move = (t: number[]) => t.map((time) => time + by);
+  for (const [id, entity] of shifted.entities) {
+    into.entities.set(`${id}@${shift}`, {
+      ...entity,
+      raw: { ...entity.raw, t: move(entity.raw.t) },
+      stats: entity.stats && { ...entity.stats, t: move(entity.stats.t) },
+    });
+  }
+  if (shifted.buckets) {
+    into.buckets ??= { period: shifted.buckets.period, entities: new Map() };
+    for (const [id, entry] of shifted.buckets.entities) {
+      into.buckets.entities.set(`${id}@${shift}`, {
+        ...entry,
+        buckets: { ...entry.buckets, t: move(entry.buckets.t), end: move(entry.buckets.end) },
+      });
+    }
+  }
+  for (const [key, series] of shifted.attributes ?? []) {
+    const [id, name] = [key.slice(0, key.indexOf('|')), key.slice(key.indexOf('|') + 1)];
+    into.attributes ??= new Map();
+    into.attributes.set(`${id}@${shift}|${name}`, { ...series, t: move(series.t) });
+  }
 }
 
 /** The points from `time` on, with the value at `time` as the first point. */
@@ -250,7 +294,7 @@ function concatColumns(a: StatColumns, b: StatColumns): StatColumns {
  * meters keep their reading whatever the card asks for.
  */
 export function seriesFor(row: EntityConfig, data: LoadedData, cardStatistic?: StatisticKind): Series {
-  const entity = data.entities.get(row.entity);
+  const entity = data.entities.get(entityKey(row));
   if (!entity) return emptySeries();
   if (!entity.stats) return entity.raw;
   const fitting = !entity.meanType ? 'state' : cardStatistic && cardStatistic !== 'state' ? cardStatistic : 'mean';
@@ -265,7 +309,7 @@ export function seriesFor(row: EntityConfig, data: LoadedData, cardStatistic?: S
 
 /** Where a row's raw history starts: everywhere for raw data, after the last bucket with statistics. */
 export function rawFrom(row: EntityConfig, data: LoadedData): number {
-  const stats = data.entities.get(row.entity)?.stats;
+  const stats = data.entities.get(entityKey(row))?.stats;
   if (!stats?.t.length) return Number.NEGATIVE_INFINITY;
   return stats.t[stats.t.length - 1] + 1;
 }
@@ -279,7 +323,7 @@ export function canReuse(
   rawSince?: number,
   bucketPeriod?: BucketPeriod,
 ): boolean {
-  if (chooseResolution(window, settings, rawSince) !== data.resolution) return false;
+  if (chooseResolution(window, settings, rawSince, now) !== data.resolution) return false;
   if (bucketPeriod !== data.buckets?.period) return false;
   if (window.start < data.window.start) return false;
   if (window.end <= data.window.end) return true;

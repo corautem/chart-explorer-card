@@ -17,11 +17,12 @@ import {
   type RangeSpec,
   type TimeWindow,
 } from './time/range';
-import { addUnits, startOfUnit } from './time/range';
+import { addUnits, followsCalendar, slides, startOfUnit } from './time/range';
 import { resolveWeekStart } from './time/week';
-import { MetaCache, WindowCache, cacheKey, canReuse, loadWindow, rawFrom, seriesFor, type LoadInput } from './data/loader';
+import { MetaCache, WindowCache, cacheKey, canReuse, entityKey, loadWindow, mergeShifted, rawFrom, seriesFor, type LoadInput } from './data/loader';
 import { bucketAt, bucketPeriodFor, bucketValues, periodEdges, windowValue } from './data/buckets';
-import { attributeSeries, sliceSeries, suggestedListUnit, type AttributeSeries } from './data/attribute';
+import { attributeSeries, isListValue, sliceSeries, suggestedListUnit, type AttributeSeries } from './data/attribute';
+import { attributeKey } from './data/history';
 import { ratioPeriods, runningRatio, windowRatio, type RatioPart, type RatioPeriods } from './data/ratio';
 import { inCommonUnits, sameFamily, unitFactor } from './units';
 import { chooseResolution } from './data/resolution';
@@ -55,7 +56,7 @@ import { buttonLabel, menuLabel, presetName, t, type StringKey } from './localiz
 import { icon } from './ui/icons';
 import { cardStyles } from './ui/styles';
 
-const VERSION = '0.8.2';
+const VERSION = '0.8.3';
 // The chart's inner edge and ECharts' gap between numbers and the plot, in pixels.
 const GRID_EDGE = 4;
 const LABEL_MARGIN = 8;
@@ -215,6 +216,7 @@ export class ChartExplorerCard extends LitElement {
       config.entities.map((row) => row.type),
       config.entities.map((row) => row.attribute?.name ?? ''),
       config.entities.map((row) => (row.ratio ? [...row.ratio.add, ...row.ratio.divideBy] : [])),
+      config.entities.map((row) => [row.timeShift ?? 0, row.showInChart]),
     ]);
     const sameData = previous !== undefined && dataKey === this._dataKey;
     this._config = config;
@@ -457,7 +459,7 @@ export class ChartExplorerCard extends LitElement {
     const weekStart = resolveWeekStart(locale.first_weekday);
     if (weekStart !== this._weekStart) {
       this._weekStart = weekStart;
-      if (this._config && this._window && this._spec?.kind === 'calendar') this._applySpec(this._spec, true);
+      if (this._config && this._window && this._spec && followsCalendar(this._spec)) this._applySpec(this._spec, true);
     }
   }
 
@@ -489,6 +491,26 @@ export class ChartExplorerCard extends LitElement {
       const time = Date.parse(state.last_changed);
       if (!Number.isFinite(time) || time < w.start) continue;
       if (appendPoint(entity.raw, Math.min(time, now), stateToNumber(state.state), state.state)) added = true;
+    }
+    for (const row of this._config?.entities ?? []) {
+      if (!ids.includes(row.entity) || !row.showInChart || (!row.timeShift && !this._attributeHistory(row))) continue;
+      const state = hass.states[row.entity];
+      if (!state) continue;
+      const shift = row.timeShift ?? 0;
+      if (this._attributeHistory(row)) {
+        // An attribute's change updates the state's last update, not its last change.
+        const series = data.attributes?.get(attributeKey(entityKey(row), (row.attribute as NonNullable<EntityConfig['attribute']>).name));
+        const time = Date.parse(state.last_updated);
+        if (!series || !Number.isFinite(time)) continue;
+        const value = this._attributeNow(row) / (row.multiply ?? 1);
+        if (appendPoint(series, Math.min(time, now) - shift, value)) added = true;
+        continue;
+      }
+      // A shifted row's new state is drawn its shift later (or earlier).
+      const entity = data.entities.get(entityKey(row));
+      const time = Date.parse(state.last_changed);
+      if (!entity || !Number.isFinite(time)) continue;
+      if (appendPoint(entity.raw, Math.min(time, now) - shift, stateToNumber(state.state), state.state)) added = true;
     }
     if (added) {
       this._version++;
@@ -545,21 +567,34 @@ export class ChartExplorerCard extends LitElement {
     return bucketPeriodFor(w, config.period);
   }
 
-  /** What to request for a window: lines, states and values per period. */
-  private _loadInput(hass: HomeAssistant, w: TimeWindow, now: number, resolution?: Resolution): LoadInput {
+  /** What to request for a window, for the given rows: lines, states, values per period and attribute histories. */
+  private _loadInput(
+    hass: HomeAssistant,
+    w: TimeWindow,
+    now: number,
+    resolution?: Resolution,
+    rows: EntityConfig[] = (this._config as CardConfig).entities.filter((row) => !row.timeShift),
+  ): LoadInput {
     const config = this._config as CardConfig;
-    const ids = (keep: (row: EntityConfig) => boolean) => config.entities.filter(keep).map((row) => row.entity);
+    // Entities shown only in the values row load nothing: they show their current value.
+    const drawn = rows.filter((row) => row.showInChart);
+    const ids = (keep: (row: EntityConfig) => boolean) => drawn.filter(keep).map((row) => row.entity);
     // A ratio needs every meter it adds up or divides by, per period.
-    const bucketIds = config.entities
+    const bucketIds = drawn
       .filter((row) => this._usesBuckets(row))
       .flatMap((row) => [row.entity, ...(row.ratio ? [...row.ratio.add, ...row.ratio.divideBy] : [])]);
     return {
       hass,
       entityIds: this._isTimeChart() ? ids((row) => !row.attribute && !row.ratio && this._kind(row) === 'line') : [],
-      textIds: ids((row) => isStateKind(this._kind(row))),
+      textIds: ids((row) => !row.attribute && isStateKind(this._kind(row))),
       bucketIds: [...new Set(bucketIds)],
       bucketPeriod: this._bucketPeriod(w),
       weekStart: this._weekStart,
+      attributeHistory: this._isTimeChart()
+        ? drawn
+            .filter((row) => this._attributeHistory(row))
+            .map((row) => ({ id: row.entity, name: (row.attribute as NonNullable<EntityConfig['attribute']>).name }))
+        : [],
       window: w,
       now,
       settings: config.data,
@@ -568,13 +603,39 @@ export class ChartExplorerCard extends LitElement {
     };
   }
 
+  /**
+   * Loads a window: the rows as they are, and for each time shift its rows
+   * over the window moved by the shift (8 hours earlier for -8h), moved back
+   * onto the window shown.
+   */
+  private async _fetch(hass: HomeAssistant, w: TimeWindow, now: number, resolution?: Resolution, bucketPeriod?: BucketPeriod): Promise<LoadedData> {
+    const config = this._config as CardConfig;
+    const groups = new Map<number, EntityConfig[]>();
+    for (const row of config.entities) {
+      if (!row.timeShift || !row.showInChart) continue;
+      groups.set(row.timeShift, [...(groups.get(row.timeShift) ?? []), row]);
+    }
+    const input = (window: TimeWindow, rows?: EntityConfig[]): LoadInput => {
+      const base = this._loadInput(hass, window, now, resolution, rows);
+      return bucketPeriod ? { ...base, bucketPeriod } : base;
+    };
+    const shifted = [...groups].map(async ([shift, rows]) => {
+      const data = await loadWindow(input({ start: w.start + shift, end: w.end + shift }, rows));
+      return { shift, data };
+    });
+    const [data, ...others] = await Promise.all([loadWindow(input(w)), ...shifted]);
+    for (const { shift, data: other } of others) mergeShifted(data, other, shift);
+    return data;
+  }
+
+
   private async _load(force: boolean): Promise<void> {
     const hass = this._hass;
     const config = this._config;
     const w = this._window;
     if (!hass || !config || !w) return;
     const now = Date.now();
-    const key = cacheKey(chooseResolution(w, config.data, this._meta.rawSince(now)), w, this._bucketPeriod(w));
+    const key = cacheKey(chooseResolution(w, config.data, this._meta.rawSince(now), now), w, this._bucketPeriod(w));
     const cached = force ? undefined : this._cache.get(key);
     if (cached) {
       this._setData(cached);
@@ -582,7 +643,7 @@ export class ChartExplorerCard extends LitElement {
     }
     const id = ++this._requestId;
     try {
-      const data = await loadWindow(this._loadInput(hass, w, now));
+      const data = await this._fetch(hass, w, now);
       if (id !== this._requestId) return;
       if (w.end < now) this._cache.set(key, data);
       this._setData(data);
@@ -604,7 +665,7 @@ export class ChartExplorerCard extends LitElement {
     if (!hass || !w || this._refreshing || this._loading || this._preview) return;
     const id = this._requestId;
     this._refreshing = true;
-    loadWindow(this._loadInput(hass, w, Date.now()))
+    this._fetch(hass, w, Date.now())
       .then((data) => {
         if (id !== this._requestId) return;
         this._data = data;
@@ -632,14 +693,14 @@ export class ChartExplorerCard extends LitElement {
     const rawSince = this._meta.rawSince(now);
     if (this._data && this._covers(this._data, w, now)) return;
     if (this._extLoad) return;
-    const resolution = chooseResolution(w, config.data, rawSince);
+    const resolution = chooseResolution(w, config.data, rawSince, now);
     const half = (w.end - w.start) / 2;
     const window = { start: Math.round(w.start - half), end: Math.round(w.end + half) };
     const id = this._requestId;
     this._extLoad = { window, resolution };
     this._gestureLoading = true;
     this.requestUpdate();
-    loadWindow({ ...this._loadInput(hass, window, now, resolution), bucketPeriod: this._bucketPeriod(w) })
+    this._fetch(hass, window, now, resolution, this._bucketPeriod(w))
       .then((data) => {
         if (id !== this._requestId) return;
         this._data = data;
@@ -808,7 +869,7 @@ export class ChartExplorerCard extends LitElement {
       }
       this._applySpec(level.spec, false, 0);
       // Live data kept from before the zoom missed the states that came in since.
-      if (restored && level.spec.kind === 'rolling') this._scheduleLoad(0, true);
+      if (restored && slides(level.spec)) this._scheduleLoad(0, true);
     },
   };
 
@@ -824,14 +885,17 @@ export class ChartExplorerCard extends LitElement {
       color: row.color ?? (row.shade ? shadeColor(row.baseColor ?? palette.color, row.shade) : palette.color),
       dashed: row.color || row.shade !== undefined ? false : palette.dashed,
       // A list from an attribute has no unit of its own; the entity's unit belongs to its state.
+      // A single-number attribute, such as a rate's threshold, is taken to share the entity's unit.
       unit: row.ratio
         ? (row.unit ?? this._ratio(row)?.unit ?? '')
+        : this._attributeHistory(row)
+        ? (row.unit ?? String(state?.attributes.unit_of_measurement ?? ''))
         : row.attribute
-        ? (row.unit ?? suggestedListUnit(state?.attributes.unit_of_measurement))
+        ? (row.unit ?? suggestedListUnit(state?.attributes.unit_of_measurement, state?.attributes[row.attribute.name]))
         : row.unit ??
         state?.attributes.unit_of_measurement ??
-        this._data?.entities.get(row.entity)?.statisticsUnit ??
-        this._data?.buckets?.entities.get(row.entity)?.unit ??
+        this._data?.entities.get(entityKey(row))?.statisticsUnit ??
+        this._data?.buckets?.entities.get(entityKey(row))?.unit ??
         '',
       decimals: row.ratio
         ? (row.decimals ?? 2)
@@ -844,14 +908,41 @@ export class ChartExplorerCard extends LitElement {
   }
 
   private _series(row: EntityConfig): Series {
-    if (row.attribute) return this._attribute(row);
+    if (this._attributeList(row)) return this._attribute(row);
     if (!this._data) return { t: [], v: [] };
     const memo = this._seriesMemo.get(row.key);
     if (memo && memo.version === this._version) return memo.series;
-    let series = seriesFor(row, this._data, this._config?.statistic);
+    let series = row.attribute
+      ? (this._data.attributes?.get(attributeKey(entityKey(row), row.attribute.name)) ?? { t: [], v: [] })
+      : seriesFor(row, this._data, this._config?.statistic);
     if (row.multiply !== undefined) series = { ...series, v: scaled(series.v, row.multiply) };
     this._seriesMemo.set(row.key, { version: this._version, series });
     return series;
+  }
+
+  /**
+   * Whether a row draws its attribute's recorded history: an attribute named
+   * without values, holding a single number rather than a list (a threshold).
+   */
+  private _attributeHistory(row: EntityConfig): boolean {
+    if (!row.attribute || row.attribute.value !== undefined) return false;
+    return !isListValue(this._hass?.states[row.entity]?.attributes[row.attribute.name]);
+  }
+
+  /** A list row: values read from a list in the attribute, drawn as the list is now. */
+  private _attributeList(row: EntityConfig): boolean {
+    return Boolean(row.attribute) && !this._attributeHistory(row);
+  }
+
+  /** The attribute's current value as a number, for the values row. */
+  private _attributeNow(row: EntityConfig): number {
+    const raw = this._hass?.states[row.entity]?.attributes[(row.attribute as NonNullable<EntityConfig['attribute']>).name];
+    return (typeof raw === 'number' ? raw : stateToNumber(raw === undefined || raw === null ? '' : String(raw))) * (row.multiply ?? 1);
+  }
+
+  /** The latest moment a row has values for: now, moved by its time shift (8 hours ahead for -8h). */
+  private _latest(row: EntityConfig, now = Date.now()): number {
+    return now - (row.timeShift ?? 0);
   }
 
   /**
@@ -865,7 +956,11 @@ export class ChartExplorerCard extends LitElement {
     const memo = this._attributeMemo.get(memoKey);
     if (memo && memo.raw === raw) return memo.series;
     const list = attributeSeries(raw, { ...source, value: key });
-    const series = row.multiply === undefined ? list : { t: list.t, v: scaled(list.v, row.multiply) };
+    const shift = row.timeShift ?? 0;
+    const series = {
+      t: shift ? list.t.map((time) => time - shift) : list.t,
+      v: row.multiply === undefined ? list.v : scaled(list.v, row.multiply),
+    };
     this._attributeMemo.set(memoKey, { raw, series });
     return series;
   }
@@ -906,7 +1001,7 @@ export class ChartExplorerCard extends LitElement {
 
   private _buckets(row: EntityConfig): RowBuckets | undefined {
     if (row.ratio) return this._ratioBuckets(row);
-    const entry = this._data?.buckets?.entities.get(row.entity);
+    const entry = this._data?.buckets?.entities.get(entityKey(row));
     if (!entry) return undefined;
     const memo = this._bucketMemo.get(row.key);
     if (memo && memo.version === this._version) return memo.buckets;
@@ -1006,7 +1101,7 @@ export class ChartExplorerCard extends LitElement {
     const until = Math.min(w.end, Date.now());
     const rows: PieRow[] = [];
     for (const row of config.entities) {
-      if (isStateKind(this._kind(row)) || row.ratio || this._faded.has(row.key)) continue;
+      if (isStateKind(this._kind(row)) || row.ratio || !row.showInChart || this._faded.has(row.key)) continue;
       const buckets = this._buckets(row);
       if (!buckets) continue;
       const value = windowValue(buckets, w.start, until, row.statistic ?? config.statistic);
@@ -1024,12 +1119,16 @@ export class ChartExplorerCard extends LitElement {
     const { row } = view;
     const kind = this._kind(row);
     // With the floating tooltip on, it follows the cursor and the row keeps the current values.
-    const cursor = this._data && !this._config?.tooltip ? this._cursor : undefined;
-    const future = cursor !== undefined && cursor > Date.now();
+    // An entity shown only in the values row keeps its current value too.
+    const cursor = this._data && !this._config?.tooltip && row.showInChart ? this._cursor : undefined;
+    // Nothing is recorded after the present, or for a shifted row after the present moved by its shift.
+    const future = cursor !== undefined && cursor > this._latest(row);
     if (isStateKind(kind)) {
-      if (cursor !== undefined) {
-        if (this._isHeatStates(row)) return this._heatHourReading(row, cursor);
-        const state = future ? undefined : stateAt(this._series(row), cursor);
+      // A shifted row shows what is drawn at the present: the state from its shift ago.
+      const at = cursor ?? (row.timeShift ? Date.now() : undefined);
+      if (at !== undefined) {
+        if (cursor !== undefined && this._isHeatStates(row)) return this._heatHourReading(row, cursor);
+        const state = future ? undefined : stateAt(this._series(row), at);
         if (state === undefined) return { text: '-', numeric: false };
         return { text: this._stateLabel(row, state), numeric: false, color: this._stateTextColor(row, state) };
       }
@@ -1053,6 +1152,11 @@ export class ChartExplorerCard extends LitElement {
       const value = ratio && w ? windowRatio(ratio, w.start, Math.min(w.end, Date.now())) * (row.multiply ?? 1) : NaN;
       return { ...this._numberReading(view, value), title: t('ratio_shown') };
     }
+    if (this._attributeHistory(row)) {
+      // A single-number attribute: its value now, or its recorded value at the cursor.
+      if (cursor !== undefined) return this._numberReading(view, future ? NaN : valueAt(this._series(row), cursor));
+      return { ...this._numberReading(view, this._attributeNow(row)), title: this._title(row) };
+    }
     if (row.attribute) {
       // A forecast has values after the present: the row shows the one now, or at the cursor.
       const reading = this._numberReading(view, valueAt(this._attribute(row), cursor ?? Date.now()));
@@ -1075,10 +1179,9 @@ export class ChartExplorerCard extends LitElement {
         return { ...this._numberReading(view, total), title: t('total_shown') };
       }
     }
-    if (cursor !== undefined) {
-      // Nothing is recorded after the present.
-      return this._numberReading(view, future ? NaN : valueAt(this._series(row), cursor));
-    }
+    if (cursor !== undefined) return this._numberReading(view, future ? NaN : valueAt(this._series(row), cursor));
+    // A shifted row shows what is drawn at the present: the value from its shift ago.
+    if (row.timeShift && row.showInChart) return { ...this._numberReading(view, valueAt(this._series(row), Date.now())), title: this._title(row) };
     const state = this._hass?.states[row.entity];
     if (!state) return { text: 'n/a', numeric: false, title: t('not_found') };
     const title = this._title(row);
@@ -1232,8 +1335,10 @@ export class ChartExplorerCard extends LitElement {
     const axis = this._axisFor(w);
     const extendTo = Math.min(w.end, now);
     const pixel = (w.end - w.start) / columns;
-    const kinds = config.entities.map((row) => this._kind(row));
-    const lineRows = config.entities.filter((_, i) => kinds[i] === 'line');
+    // Entities shown only in the values row are not drawn.
+    const drawn = config.entities.filter((row) => row.showInChart);
+    const kinds = drawn.map((row) => this._kind(row));
+    const lineRows = drawn.filter((_, i) => kinds[i] === 'line');
     const stacked = config.chartType === 'area';
 
     let series: PlotSeries[] = lineRows.map((row) => {
@@ -1245,7 +1350,7 @@ export class ChartExplorerCard extends LitElement {
         const buckets = this._ratioBuckets(row);
         const until = Date.now();
         if (buckets) data = { t: buckets.end.map((end) => Math.min(end, until)), v: buckets.v };
-      } else if (row.attribute) {
+      } else if (this._attributeList(row)) {
         // A list from an attribute is drawn as it is, into the future, without thinning or holding.
         const list = sliceSeries(this._attribute(row), w.start, w.end);
         data = { t: list.t, v: list.v };
@@ -1258,7 +1363,8 @@ export class ChartExplorerCard extends LitElement {
         data = decimate(this._series(row), w.start, w.end, columns);
         if (row.curve !== 'step') data = holdValues(data, 2 * pixel, rawFrom(row, this._data));
       }
-      if (!stacked && !row.attribute && !row.ratio) extendLastValue(data, extendTo);
+      // History reaches the present; a shifted row reaches the present moved by its shift.
+      if (!stacked && !this._attributeList(row) && !row.ratio) extendLastValue(data, Math.min(w.end, this._latest(row, now)));
       const axisIndex = axisOf.get(row.key) ?? 0;
       return {
         key: row.key,
@@ -1300,7 +1406,7 @@ export class ChartExplorerCard extends LitElement {
       };
     });
 
-    const barRows = config.entities.filter((_, i) => kinds[i] === 'bar');
+    const barRows = drawn.filter((_, i) => kinds[i] === 'bar');
     const placed = placeBars(
       barRows.map((row) => {
         const buckets = this._buckets(row) ?? { t: [], end: [], v: [] };
@@ -1318,7 +1424,7 @@ export class ChartExplorerCard extends LitElement {
     }));
 
     const until = Math.min(axis.end, now);
-    const bands: PlotBand[] = config.entities
+    const bands: PlotBand[] = drawn
       .filter((_, i) => kinds[i] === 'band')
       .map((row) => ({
         key: row.key,
@@ -1329,7 +1435,7 @@ export class ChartExplorerCard extends LitElement {
           : [],
       }));
 
-    const stripRows = config.entities.filter((_, i) => kinds[i] === 'timeline');
+    const stripRows = drawn.filter((_, i) => kinds[i] === 'timeline');
     const strips: PlotTimelineRow[] = stripRows.map((row) => ({
       key: row.key,
       name: this._view(row).name,
@@ -1408,7 +1514,7 @@ export class ChartExplorerCard extends LitElement {
 
   /** The heatmap shows the first entity that is not faded, hour by hour. */
   private _heatRow(): EntityConfig | undefined {
-    const rows = (this._config?.entities ?? []).filter((row) => !row.attribute && !row.ratio);
+    const rows = (this._config?.entities ?? []).filter((row) => !row.attribute && !row.ratio && row.showInChart);
     return rows.find((row) => !this._faded.has(row.key)) ?? rows[0];
   }
 
@@ -1532,7 +1638,7 @@ export class ChartExplorerCard extends LitElement {
     if (!w || !this._data) return { pies, names };
     const until = Math.min(w.end, Date.now());
     for (const row of config.entities) {
-      if (!isStateKind(this._kind(row)) || this._faded.has(row.key)) continue;
+      if (!isStateKind(this._kind(row)) || !row.showInChart || this._faded.has(row.key)) continue;
       const slices = [...stateDurations(this._series(row), w.start, until)]
         .filter(([state]) => !isMissingState(state))
         .map(([state, time]) => ({ name: this._stateLabel(row, state), value: time / HOUR, color: this._stateColor(row, state) ?? '' }));
@@ -1584,6 +1690,8 @@ export class ChartExplorerCard extends LitElement {
     const axisOf = new Map<string, number>();
     const factorOf = new Map<string, number>();
     for (const row of config.entities) {
+      // An entity shown only in the values row adds no scale.
+      if (!row.showInChart) continue;
       const kind = this._kind(row);
       if (kind !== 'line' && kind !== 'bar') continue;
       const unit = this._view(row).unit;
@@ -1628,15 +1736,15 @@ export class ChartExplorerCard extends LitElement {
       return reading.unit ? `${reading.text} ${reading.unit}` : reading.text;
     }
     if (isStateKind(this._kind(row))) {
-      const state = ms > Date.now() ? undefined : stateAt(this._series(row), ms);
+      const state = ms > this._latest(row) ? undefined : stateAt(this._series(row), ms);
       return state === undefined ? '-' : this._stateLabel(row, state);
     }
     const buckets = this._usesBuckets(row) ? this._buckets(row) : undefined;
-    const value = row.attribute
+    const value = this._attributeList(row)
       ? valueAt(this._attribute(row), ms)
       : buckets
         ? bucketAt(buckets, ms)
-        : ms > Date.now()
+        : ms > this._latest(row)
           ? NaN
           : valueAt(this._series(row), ms);
     if (!Number.isFinite(value)) return '-';
@@ -1658,6 +1766,7 @@ export class ChartExplorerCard extends LitElement {
     if (config.chartType === 'pie' || config.chartType === 'donut') return this._pies(config).pies.length > 0;
     if (config.chartType === 'heatmap') return this._heatCells().length > 0;
     return config.entities.some((row) => {
+      if (!row.showInChart) return false;
       if (this._usesBuckets(row)) return this._buckets(row)?.v.some((value) => Number.isFinite(value)) ?? false;
       const series = this._series(row);
       const i = indexAtOrBefore(series.t, w.end);
@@ -1688,7 +1797,7 @@ export class ChartExplorerCard extends LitElement {
   /** Height of the chart canvas: the plot, plus the timeline strips under it. */
   private _chartHeight(config: CardConfig): number {
     if (!this._isTimeChart()) return config.height;
-    const kinds = config.entities.map((row) => this._kind(row));
+    const kinds = config.entities.filter((row) => row.showInChart).map((row) => this._kind(row));
     const strips = kinds.filter((kind) => kind === 'timeline').length;
     if (!strips) return config.height;
     const stripHeight = timelineHeight(strips, config.timeline.rowHeight, config.timeline.names);
@@ -1774,13 +1883,13 @@ export class ChartExplorerCard extends LitElement {
     clearInterval(this._minuteTimer);
   }
 
-  /** Once a minute: rolling windows slide, a new day starts "today", the now line moves. */
+  /** Once a minute: rolling windows and spans slide, a new day starts "today", the now line moves. */
   private _tick(): void {
     const spec = this._spec;
     const w = this._window;
     if (!spec || !w || !this._config || !this._hass) return;
     const now = Date.now();
-    if (spec.kind === 'rolling') {
+    if (slides(spec)) {
       this._window = resolveWindow(spec, now, this._weekStart);
       if (this._data && !this._loading) {
         for (const entity of this._data.entities.values()) trimBefore(entity.raw, this._window.start);
@@ -1791,7 +1900,7 @@ export class ChartExplorerCard extends LitElement {
       this._requestDraw();
       return;
     }
-    if (spec.kind === 'calendar' && resolveWindow(spec, now, this._weekStart).start !== w.start) {
+    if (followsCalendar(spec) && resolveWindow(spec, now, this._weekStart).start !== w.start) {
       this._applySpec(spec, true, 0);
       return;
     }
@@ -1837,7 +1946,7 @@ export class ChartExplorerCard extends LitElement {
       });
       const until = Math.min(w.end, Date.now());
       for (const row of config.entities) {
-        if (!isStateKind(this._kind(row)) || this._faded.has(row.key)) continue;
+        if (!isStateKind(this._kind(row)) || !row.showInChart || this._faded.has(row.key)) continue;
         const durations = [...stateDurations(this._series(row), w.start, until)].filter(([state]) => !isMissingState(state));
         const total = durations.reduce((sum, [, time]) => sum + time, 0);
         for (const [state, time] of durations) {
@@ -1859,7 +1968,7 @@ export class ChartExplorerCard extends LitElement {
     const rows =
       config.chartType === 'heatmap'
         ? [this._heatRow()].filter((row): row is EntityConfig => Boolean(row))
-        : config.entities.filter((row) => !this._faded.has(row.key));
+        : config.entities.filter((row) => row.showInChart && !this._faded.has(row.key));
     const columns: CsvColumn[] = rows.map((row): CsvColumn => {
       const view = this._view(row);
       if (row.attribute) {

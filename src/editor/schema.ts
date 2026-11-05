@@ -247,11 +247,13 @@ export function fromForm(form: FormData, original: CardConfigInput, entities: En
 
 // ---- Entities ----
 
-const ENTITY_DEFAULTS = { curve: 'smooth', width: 2, fill: false, show_in_header: true, show_unit: true, show_name: true };
+const ENTITY_DEFAULTS = { curve: 'smooth', width: 2, fill: false, show_in_header: true, show_unit: true, show_name: true, show_in_chart: true };
 // state_colors is not listed: the state colour form edits it, and the main form keeps it as it is.
 const ENTITY_KEYS = [
   'entity',
   'multiply',
+  'time_shift',
+  'show_in_chart',
   'divide_by',
   'add',
   'min_divisor',
@@ -343,6 +345,8 @@ export function entityFromForm(form: FormData, original: EntityItem, defaultColo
     out.multiply = form.multiply;
   }
   if (form.show_in_header === false) out.show_in_header = false;
+  if (form.show_in_chart === false) out.show_in_chart = false;
+  if (typeof form.time_shift === 'string' && form.time_shift.trim()) out.time_shift = form.time_shift.trim();
   if (form.show_name === false) out.show_name = false;
   if (form.show_unit === false) out.show_unit = false;
   // Not shown in the editor, but kept when set in YAML.
@@ -418,6 +422,8 @@ export const LABELS: Record<string, string> = {
   fill: 'Fill under the line',
   fill_opacity: 'Fill opacity',
   multiply: 'Multiply by',
+  time_shift: 'Shift in time',
+  show_in_chart: 'Draw in the chart',
   divide_by: 'Divide by',
   add: 'Add to this meter',
   min_divisor: 'Smallest divisor',
@@ -484,6 +490,10 @@ export const HELPERS: Record<string, string> = {
   line_style: 'Automatic is a solid line; from the ninth entity on, lines are dashed so colours can repeat. None leaves only the fill or the shaded range.',
   fill_opacity: 'Leave empty for a fill that fades downwards; a percentage gives an even fill at that opacity.',
   attribute_name: 'The recorded history, or a list kept in one of the entity\'s attributes, such as a solar forecast or electricity prices. A list is drawn as it is now, including times still to come.',
+  time_shift:
+    'Moves the entity in time, as apexcharts-card\'s offset does: -8h draws, at each moment, the value from 8 hours earlier, so a forecast made 8 hours ago lines up with the actual values. Leave empty for none.',
+  show_in_chart:
+    'Off keeps the entity in the values row only, with its current value: no line and no scale of its own.',
   multiply:
     'Multiplies every value of this entity, for a unit the card cannot convert, such as 1000 to show a sensor in kW as W; set the unit to match. W and kW, Wh and kWh are converted without it. Leave empty for none.',
   divide_by:
@@ -512,7 +522,10 @@ const number = (min: number, max: number, step: number, unit?: string, mode = 'b
 });
 
 export function generalSchema(form: FormData): unknown[] {
-  const ids = [...new Set([...tidyRangeItems(form.quick_ranges), ...tidyRangeItems(form.presets), ...PRESET_IDS])];
+  // The starting window may be any entry, or a span written in YAML that is in neither list.
+  const ids = [
+    ...new Set([...tidyRangeItems(form.quick_ranges), ...tidyRangeItems(form.presets), ...PRESET_IDS, ...tidyRangeItems([form.default_range])]),
+  ];
   return [
     { name: 'title', selector: { text: {} } },
     {
@@ -702,6 +715,10 @@ export interface ListSource {
   chosen: string;
   /** False when the time key could not be found automatically, so it must be picked. */
   showTime?: boolean;
+  /** Attributes holding a single number, whose recorded history can be drawn. */
+  numbers?: string[];
+  /** The chosen attribute holds a single number: its history is drawn like an entity's. */
+  history?: boolean;
 }
 
 // ---- Values drawn from an attribute's list ----
@@ -827,7 +844,11 @@ export function entitySchema(
   ratio = false,
 ): unknown[] {
   const numeric = kind === 'line' || kind === 'bar';
-  const names = list.chosen && !list.attributes.includes(list.chosen) ? [...list.attributes, list.chosen] : list.attributes;
+  const numbers = (list.numbers ?? []).filter((name) => !list.attributes.includes(name));
+  const known = [...list.attributes, ...numbers];
+  const names = list.chosen && !known.includes(list.chosen) ? [...known, list.chosen] : known;
+  // A list is drawn through its values; a single-number attribute is drawn like an entity.
+  const asList = Boolean(list.chosen) && !list.history;
   const keyOptions = (first: [string, string]) => select([first, ...list.keys.map((key): [string, string] => [key, key])]);
   const schema: unknown[] = [
     { name: 'entity', required: true, selector: { entity: {} } },
@@ -841,12 +862,15 @@ export function entitySchema(
   if (names.length && !ratio) {
     schema.push({
       name: 'attribute_name',
-      selector: select([['', 'Recorded history'], ...names.map((name): [string, string] => [name, `Attribute: ${name}`])]),
+      selector: select([
+        ['', 'Recorded history'],
+        ...names.map((name): [string, string] => [name, numbers.includes(name) ? `Attribute: ${name} (its history)` : `Attribute: ${name}`]),
+      ]),
     });
   }
-  if (list.chosen) {
+  if (asList) {
     if (list.showTime) schema.push({ name: 'attribute_time', selector: keyOptions(['auto', 'Automatic']) });
-  } else {
+  } else if (!list.chosen) {
     schema.push({
       name: 'type',
       selector: select([
@@ -863,7 +887,7 @@ export function entitySchema(
     });
   }
   const curve = { name: 'curve', selector: select([['smooth', 'Smooth'], ['straight', 'Straight'], ['step', 'Steps']]) };
-  if (kind === 'line' && list.chosen) {
+  if (kind === 'line' && asList) {
     // Each value of the list has its own line type and fill, in the Values to draw section.
     schema.push(curve, { name: 'width', selector: number(0.5, 8, 0.5, 'px', 'slider') });
   } else if (kind === 'line') {
@@ -883,7 +907,13 @@ export function entitySchema(
       selector: { select: { multiple: true, mode: 'list', options: states.map((state) => ({ value: state, label: state })) } },
     });
   }
-  schema.push({ name: 'show_in_header', selector: { boolean: {} } }, { name: 'show_name', selector: { boolean: {} } });
+  schema.push(
+    { name: 'show_in_chart', selector: { boolean: {} } },
+    { name: 'show_in_header', selector: { boolean: {} } },
+    { name: 'show_name', selector: { boolean: {} } },
+  );
+  // A ratio's meters are read over the window as it is, so it cannot be shifted.
+  if (!ratio) schema.push({ name: 'time_shift', selector: { text: {} } });
   if (numeric) {
     schema.push(
       { name: 'show_unit', selector: { boolean: {} } },
@@ -894,7 +924,7 @@ export function entitySchema(
         selector: select([['auto', 'Automatic (by unit)'], ['left', 'Left scale'], ['right', 'Right scale']]),
       },
     );
-    // A list from an attribute is drawn as it is, and a ratio divides rises, so the choice for long windows does not apply.
+    // A list or attribute is drawn as it is, and a ratio divides rises, so the choice for long windows does not apply.
     if (!list.chosen && !ratio) {
       schema.push({
         name: 'statistic',

@@ -1,0 +1,88 @@
+name: Bug report
+description: Something in the card or its editor does not work as described.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem. Before you start, check the [Troubleshooting](https://github.com/corautem/chart-explorer-card#troubleshooting) list in the README, and reload the browser if you updated the card recently.
+
+        For questions about setting something up, the [Home Assistant Community thread](https://community.home-assistant.io/t/chart-explorer-card-history-forecasts-and-ratios-with-time-controls-in-one-row/1032906) is the better place.
+
+        This page is public: leave out anything private, such as addresses, names or account numbers. You can rename entities in what you paste here.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happens
+      description: What you see, and what you expected instead.
+      placeholder: The bars for this week show nothing, but the same entities draw as lines.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: How to make it happen
+      description: The steps, starting from opening the dashboard.
+      placeholder: |
+        1. Open the dashboard with the card.
+        2. Pick This week from the Presets menu.
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: config
+    attributes:
+      label: Card configuration
+      description: In the card editor, select Show code editor and copy the YAML.
+      render: yaml
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Card version
+      description: Shown in HACS, and in the browser console as CHART-EXPLORER-CARD followed by the version.
+      placeholder: "0.8.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: Installed through
+      options:
+        - HACS
+        - By hand
+    validations:
+      required: true
+  - type: input
+    id: home-assistant
+    attributes:
+      label: Home Assistant version
+      description: Settings → About.
+      placeholder: "2026.11.1"
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: Chrome on Windows 11, or the Companion app on an Android phone
+    validations:
+      required: true
+  - type: textarea
+    id: entities
+    attributes:
+      label: About the entities
+      description: For each entity involved, its unit, its state class and an example of its state, from Developer tools → States. Leave empty if it does not matter.
+      placeholder: "sensor.heat_pump_energy: kWh, total_increasing, 1523.4"
+  - type: textarea
+    id: console
+    attributes:
+      label: Errors in the browser console
+      description: Optional. Press F12 (or Cmd + Option + I on a Mac), open Console, and copy any red lines that mention chart-explorer-card.
+      render: text
+  - type: textarea
+    id: pictures
+    attributes:
+      label: Screenshots
+      description: Optional. Drag pictures of the card here.

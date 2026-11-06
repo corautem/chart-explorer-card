@@ -1,0 +1,30 @@
+name: Feature idea
+description: Something the card could do that it does not do yet.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the idea. Check [Options](https://github.com/corautem/chart-explorer-card/blob/main/docs/options.md) first: the card may already do it under another name.
+
+        This page is public: leave out anything private, such as addresses, names or account numbers.
+  - type: textarea
+    id: idea
+    attributes:
+      label: What the card should do
+      placeholder: Show the minimum and maximum of each day as a shaded range behind the line.
+    validations:
+      required: true
+  - type: textarea
+    id: purpose
+    attributes:
+      label: What it is for
+      description: The chart you want to make, and the entities it uses.
+      placeholder: Comparing the outdoor temperature with the heat pump's flow temperature over a winter.
+    validations:
+      required: true
+  - type: textarea
+    id: example
+    attributes:
+      label: An example
+      description: Optional. A picture of a chart that does this (another card, an app, a sketch), or the YAML you imagine.

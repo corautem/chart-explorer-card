@@ -4,7 +4,7 @@
 
 A Home Assistant dashboard card for exploring history: lines, stacked areas, bars, pies and hour-by-day heatmaps, with on/off and status entities as coloured strips. A one-row toolbar picks the time window, you drag and pinch to move through time, and the download button saves what is shown as CSV or PNG.
 
-![A temperature line with the heating periods shaded behind it and the heat pump status as a coloured strip underneath](docs/images/card.png)
+![The card in use: picking 7 days from the Presets menu, dragging, zooming, hovering, fading a line and opening the download menu](docs/images/card-demo.gif)
 
 ## Features
 
@@ -36,6 +36,12 @@ A picture and an example for each: [Chart types](docs/chart-types.md).
 ## Installing
 
 ### HACS
+
+From Home Assistant 2026.11, HACS is built in as the **Marketplace**.
+
+[![Open this repository in HACS on your Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=corautem&repository=chart-explorer-card&category=plugin)
+
+The button opens the card's page in HACS on your Home Assistant, after asking to add it as a custom repository. Select **Download** there and reload the browser. Or add it yourself:
 
 1. In Home Assistant, open **HACS**, then the three-dot menu → **Custom repositories**.
 2. Paste `https://github.com/corautem/chart-explorer-card`, choose the type **Dashboard**, and select **Add**.
@@ -69,7 +75,9 @@ entities:
   - binary_sensor.heating
 ```
 
-![The visual editor's Entities tab beside the card](docs/images/editor.png)
+![The visual editor beside the card: adding an entity, then the General, Visual and Advanced tabs](docs/images/editor-demo.gif)
+
+*Recorded on the card's test page with made-up data; in Home Assistant the editor shows its usual switches and drop-downs.*
 
 The editor saves only what differs from the defaults, so the YAML stays short. Every option is listed in [Options](docs/options.md).
 
@@ -280,7 +288,10 @@ entities:
 
 ## Support
 
-I build Chart Explorer Card in my spare time. If it's useful to you, a star on GitHub (the Star button at the top of the repository page) helps other people find it. If you'd like to support the work, you can do so through [GitHub Sponsors](https://github.com/sponsors/corautem) or on [Ko-fi](https://ko-fi.com/corautem). Bug reports and ideas are welcome in the issues.
+I build Chart Explorer Card in my spare time. If it's useful to you, a star on GitHub (the Star button at the top of the repository page) helps other people find it. If you'd like to support the work, you can do so through [GitHub Sponsors](https://github.com/sponsors/corautem) or on [Ko-fi](https://ko-fi.com/corautem).
+
+- **Bugs and feature ideas:** [GitHub issues](https://github.com/corautem/chart-explorer-card/issues).
+- **Questions, setups and discussion:** the [Home Assistant Community thread](https://community.home-assistant.io/t/chart-explorer-card-history-forecasts-and-ratios-with-time-controls-in-one-row/1032906).
 
 ## Licence
 

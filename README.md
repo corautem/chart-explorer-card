@@ -1,6 +1,6 @@
 # <img src="https://raw.githubusercontent.com/corautem/chart-explorer-card/main/docs/images/icon-128.png" alt="" width="40" height="40" align="top"> Chart Explorer Card
 
-[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/corautem)
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/corautem) [![Sponsor me on GitHub](docs/images/github-sponsors.svg)](https://github.com/sponsors/corautem)
 
 A Home Assistant dashboard card for exploring history: lines, stacked areas, bars, pies and hour-by-day heatmaps, with on/off and status entities as coloured strips. A one-row toolbar picks the time window, you drag and pinch to move through time, and the download button saves what is shown as CSV or PNG.
 

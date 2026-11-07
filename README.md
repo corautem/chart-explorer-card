@@ -295,7 +295,7 @@ I build Chart Explorer Card in my spare time. If it's useful to you, a star on G
 
 ## Licence
 
-Copyright (C) 2026 the Chart Explorer Card contributors.
+Copyright (C) 2026 corautem.
 
 Chart Explorer Card is free software: you can redistribute it and/or modify it under the terms of version 3 of the GNU General Public License as published by the Free Software Foundation (GPL-3.0-only). It is distributed in the hope that it will be useful, but without any warranty; see the [GNU General Public License](LICENSE) for details.
 

@@ -6,7 +6,7 @@ const { version, license } = pkg;
 // HACS copies only the .js files, so the licence notice travels inside them.
 const banner = (editor: boolean) =>
   [
-    `/*! Chart Explorer Card ${version} | ${license}`,
+    `/*! Chart Explorer Card ${version} | Copyright (C) 2026 corautem | ${license}`,
     editor
       ? ' * Includes Lit (BSD-3-Clause) and Material Design Icons paths (Apache-2.0).'
       : ' * Includes Apache ECharts (Apache-2.0), with code from d3 (BSD-3-Clause); ZRender (BSD-3-Clause);\n' +

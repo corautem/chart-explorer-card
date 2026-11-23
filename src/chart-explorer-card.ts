@@ -161,6 +161,8 @@ export class ChartExplorerCard extends LitElement {
   private _customFrom = '';
   private _customTo = '';
   private _customError?: string;
+  /** Why the last export failed, shown until a menu opens. */
+  private _notice?: string;
   /** 0 full toolbar, 1 two-line label, 2 short name on the menu button, 3 label may be cut short. */
   private _toolbarLevel = 0;
   private readonly _levelWidths: number[] = [];
@@ -817,6 +819,7 @@ export class ChartExplorerCard extends LitElement {
     }
     this._menu = next;
     if (next) {
+      this._notice = undefined;
       document.addEventListener('pointerdown', this._onOutsidePointer, true);
       document.addEventListener('keydown', this._onKey, true);
     } else {
@@ -1960,6 +1963,8 @@ export class ChartExplorerCard extends LitElement {
       await saveFile(new Blob([text], { type: 'text/csv;charset=utf-8' }), exportFileName(config.title, w, 'csv'));
     } catch (err) {
       console.error('chart-explorer-card: CSV export failed', err);
+      this._notice = `${t('export_failed')} ${errorText(err)}`;
+      this.requestUpdate();
     }
   };
 
@@ -2073,6 +2078,8 @@ export class ChartExplorerCard extends LitElement {
       await saveFile(blob, exportFileName(config.title, w, 'png'));
     } catch (err) {
       console.error('chart-explorer-card: PNG export failed', err);
+      this._notice = `${t('export_failed')} ${errorText(err)}`;
+      this.requestUpdate();
     }
   };
 
@@ -2091,6 +2098,7 @@ export class ChartExplorerCard extends LitElement {
     return html`
       <ha-card class=${bottom ? 'bottom' : ''} style=${`--chart-height:${this._chartHeight(config)}px`}>
         ${config.title ? html`<div class="title">${config.title}</div>` : nothing}
+        ${this._notice ? html`<div class="notice" role="alert">${this._notice}</div>` : nothing}
         ${bottom ? nothing : toolbar} ${below ? nothing : values}
         <div class="chart-wrap drag-${config.dragAction}">
           ${this._loading || this._gestureLoading

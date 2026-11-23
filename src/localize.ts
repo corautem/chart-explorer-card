@@ -18,6 +18,7 @@ const STRINGS = {
   download: 'Download',
   download_csv: 'CSV of what is shown',
   download_png: 'PNG image',
+  export_failed: 'Could not save the file:',
   loading: 'Loading…',
   retry: 'Retry',
   load_failed: 'Could not load the data.',

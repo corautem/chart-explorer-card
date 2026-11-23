@@ -211,7 +211,8 @@ export const cardStyles = css`
     justify-content: flex-end;
     gap: 6px;
   }
-  .popover .error {
+  .popover .error,
+  .notice {
     color: var(--error-color, #db4437);
     font-size: 12px;
     margin-bottom: 6px;

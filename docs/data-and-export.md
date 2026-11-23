@@ -39,3 +39,5 @@ New states arrive through the connection the dashboard already has; the card doe
 Files are named after the card title (or `chart`) with the start and end date, for example `Heating_2026-10-26_2026-11-01.csv`. Windows that do not start and end at midnight add the time: `Heating_2026-10-30_0800_2026-10-30_1430.csv`.
 
 In the Home Assistant Companion app, where ordinary downloads may not work, the card offers the phone's share sheet instead.
+
+If the file cannot be made, a line under the title says why until you next open a menu.

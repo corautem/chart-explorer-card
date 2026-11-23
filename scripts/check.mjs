@@ -500,6 +500,26 @@ try {
     const desk = await heights();
     check('legend names keep their size on desktop', !desk.coarse && desk.all.length > 0 && desk.all.every((h) => h < 24), desk.all.map((h) => h.toFixed(1)).join(' '));
   }
+  {
+    // A failed export says so in the card, and the message goes when a menu next opens.
+    const { page, context } = await open('?only=1&live=0');
+    await page.waitForFunction((sel) => document.querySelector(sel)?._data, card(), { timeout: 10000 });
+    await page.evaluate((sel) => {
+      document.querySelector(sel)._csvText = () => {
+        throw new Error('Simulated failure');
+      };
+    }, card());
+    const download = page.locator(`${card()} .icon-button[aria-label="Download"]`);
+    await download.click();
+    await page.locator(`${card()} .menu button`, { hasText: 'CSV' }).click();
+    const notice = page.locator(`${card()} .notice`);
+    await notice.waitFor({ timeout: 3000 }).catch(() => {});
+    const text = (await notice.count()) ? await notice.innerText() : '';
+    check('a failed export shows a message in the card', text.includes('Simulated failure'), text);
+    await download.click();
+    check('the export message goes when a menu opens', (await notice.count()) === 0);
+    await context.close();
+  }
   // ---- Visual editor (with stand-ins for Home Assistant's form elements) ----
   {
     const { page, context, errors } = await open('?editor=1&only=1&live=0&delay=50', { width: 1400, height: 1400 });

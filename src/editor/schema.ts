@@ -281,7 +281,6 @@ export function entityId(item: EntityItem): string {
   return typeof item === 'string' ? item : item.entity;
 }
 
-/** Form data for one entity, with its current (or default) colour as RGB. */
 /** The original text (rgba(), names) while the picker still shows it; hex once the user picks another colour. */
 export function pickedColor(rgb: number[], original: string | undefined, automatic: string): string | undefined {
   const hex = toHex(rgb);
@@ -290,6 +289,7 @@ export function pickedColor(rgb: number[], original: string | undefined, automat
   return hex === toHex(toRgb(automatic) ?? [0, 0, 0]) ? undefined : hex;
 }
 
+/** Form data for one entity, with its current (or default) colour as RGB. */
 export function entityToForm(item: EntityItem, defaultColor: string): FormData {
   const e: EntityConfigInput = typeof item === 'string' ? { entity: item } : item;
   const source = typeof e.attribute === 'string' ? { name: e.attribute } : e.attribute;

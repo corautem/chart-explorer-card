@@ -1,7 +1,7 @@
 import { LitElement, css, html, nothing, svg } from 'lit';
 import type { AttributeSourceInput, CardConfigInput, EntityConfigInput } from '../config';
 import type { HomeAssistant } from '../ha-types';
-import { seriesColor, toHex, toRgb } from '../chart/theme';
+import { seriesColor, toRgb } from '../chart/theme';
 import { isMissingState, stateColor, type StateColorContext } from '../chart/states';
 import { isStateKind, kindSettled, rowKind } from '../rows';
 import { automaticValueKey, hasKnownTimeKey, isListValue, itemKeys, listAttributes, numberAttributes, numberKeys } from '../data/attribute';
@@ -30,6 +30,7 @@ import {
   entityToForm,
   fromForm,
   generalSchema,
+  pickedColor,
   rangeLabel,
   stateColorSchema,
   tidyMenuItems,
@@ -831,8 +832,8 @@ export class ChartExplorerCardEditor extends LitElement {
     for (const state of states) {
       const rgb = event.detail.value[`state:${state}`];
       if (!Array.isArray(rgb)) continue;
-      const hex = toHex(rgb as number[]);
-      if (hex !== toHex(toRgb(shownColor(state, automatic)) ?? [0, 0, 0])) colors[state] = hex;
+      const color = pickedColor(rgb as number[], e.state_colors?.[state], shownColor(state, automatic));
+      if (color) colors[state] = color;
     }
     if (Object.keys(colors).length) e.state_colors = colors;
     else delete e.state_colors;

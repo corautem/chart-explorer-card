@@ -282,6 +282,14 @@ export function entityId(item: EntityItem): string {
 }
 
 /** Form data for one entity, with its current (or default) colour as RGB. */
+/** The original text (rgba(), names) while the picker still shows it; hex once the user picks another colour. */
+export function pickedColor(rgb: number[], original: string | undefined, automatic: string): string | undefined {
+  const hex = toHex(rgb);
+  const was = original === undefined ? undefined : toRgb(original);
+  if (was && toHex(was) === hex) return original;
+  return hex === toHex(toRgb(automatic) ?? [0, 0, 0]) ? undefined : hex;
+}
+
 export function entityToForm(item: EntityItem, defaultColor: string): FormData {
   const e: EntityConfigInput = typeof item === 'string' ? { entity: item } : item;
   const source = typeof e.attribute === 'string' ? { name: e.attribute } : e.attribute;
@@ -327,9 +335,8 @@ export function entityFromForm(form: FormData, original: EntityItem, defaultColo
   if (form.type && form.type !== 'auto' && !out.attribute) out.type = form.type;
   if (typeof form.name === 'string' && form.name.trim()) out.name = form.name;
   if (Array.isArray(form.color)) {
-    const hex = toHex(form.color as number[]);
-    const defaultHex = toHex(toRgb(defaultColor) ?? [0, 0, 0]);
-    if (hex !== defaultHex) out.color = hex;
+    const color = pickedColor(form.color as number[], typeof original === 'string' ? undefined : original.color, defaultColor);
+    if (color) out.color = color;
   }
   if (typeof form.unit === 'string' && form.unit.trim()) out.unit = form.unit;
   if (form.curve && form.curve !== ENTITY_DEFAULTS.curve) out.curve = form.curve;
@@ -776,8 +783,8 @@ export function valuesFromForm(form: FormData, keys: string[], previous: Attribu
     if (typeof name === 'string' && name.trim()) value.name = name;
     const rgb = form[`color:${key}`];
     if (Array.isArray(rgb)) {
-      const hex = toHex(rgb as number[]);
-      if (hex !== toHex(toRgb(valueColor(entityColor, out.length)) ?? [0, 0, 0])) value.color = hex;
+      const color = pickedColor(rgb as number[], before?.color, valueColor(entityColor, out.length));
+      if (color) value.color = color;
     }
     const line = form[`line:${key}`];
     if (line && line !== 'solid') value.line_style = line as AttributeValueInput['line_style'];

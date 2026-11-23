@@ -54,9 +54,11 @@ export const cardStyles = css`
     outline: 2px solid var(--primary-color);
     outline-offset: -2px;
   }
+  /* Text in the text colour: the primary colour on its own tint was hard to read in light themes. */
   button.active {
-    color: var(--primary-color);
-    background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.14);
+    color: var(--primary-text-color);
+    background: rgba(var(--rgb-primary-color, 3, 169, 244), 0.2);
+    box-shadow: inset 0 -2px 0 var(--primary-color);
   }
   button:disabled {
     opacity: 0.4;

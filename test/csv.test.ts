@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildCsv } from '../src/export/csv';
+import { buildCsv, buildPieCsv } from '../src/export/csv';
 import type { CsvSettings } from '../src/config';
 
 const local = (h: number, min = 0, s = 0) => new Date(2026, 9, 30, h, min, s).getTime();
@@ -68,5 +68,19 @@ describe('CSV export', () => {
   it('drops floating-point noise', () => {
     const noisy = { header: 'x', t: [local(8)], v: [0.1 + 0.2] };
     expect(rows(buildCsv([noisy], local(8), local(9), settings))[1]).toBe('2026-10-30 08:00:00,0.3');
+  });
+  it('keeps text cells from being read as formulas', () => {
+    const mode = { header: 'Mode', t: [local(8), local(9)], v: [NaN, NaN], s: ['=1+1', ''] };
+    const level = { header: 'Level', t: [local(8)], v: [-5] };
+    expect(rows(buildCsv([mode, level], local(8), local(10), settings))).toEqual([
+      'time,Mode,Level',
+      "2026-10-30 08:00:00,'=1+1,-5",
+      '2026-10-30 09:00:00,,',
+    ]);
+  });
+
+  it('keeps pie names and units from being read as formulas', () => {
+    const csv = buildPieCsv([{ name: '=cmd', value: 2, unit: '@SUM(1)', share: 100 }], settings);
+    expect(rows(csv)[1]).toBe("'=cmd,2,'@SUM(1),100");
   });
 });

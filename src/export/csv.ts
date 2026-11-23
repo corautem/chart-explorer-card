@@ -18,9 +18,9 @@ export interface CsvColumn {
  */
 export function buildCsv(columns: CsvColumn[], start: number, end: number, settings: CsvSettings): string {
   const sep = settings.separator;
-  const cell = (c: CsvColumn, i: number) => (c.s ? (c.s[i] ?? '') : formatValue(c.v[i], settings.decimal));
+  const cell = (c: CsvColumn, i: number) => (c.s ? textCell(c.s[i] ?? '') : formatValue(c.v[i], settings.decimal));
   const lines: string[] = [
-    ['time', ...columns.map((c) => headerCell(c.header))].map((text) => quote(text, sep)).join(sep),
+    ['time', ...columns.map((c) => textCell(c.header))].map((text) => quote(text, sep)).join(sep),
   ];
   const next = columns.map((c) => indexAtOrAfter(c.t, start));
   // Values carried in from before the window, as of `start`.
@@ -75,9 +75,9 @@ export function buildPieCsv(slices: CsvSlice[], settings: CsvSettings): string {
   for (const slice of slices) {
     lines.push(
       [
-        headerCell(slice.name),
+        textCell(slice.name),
         formatValue(slice.value, settings.decimal),
-        slice.unit,
+        textCell(slice.unit),
         formatValue(Math.round(slice.share * 10) / 10, settings.decimal),
       ]
         .map((text) => quote(text, sep))
@@ -94,8 +94,8 @@ function formatValue(value: number, decimal: '.' | ','): string {
   return decimal === ',' ? text.replace('.', ',') : text;
 }
 
-/** Keeps spreadsheet programs from reading a header such as "=x" as a formula. */
-function headerCell(text: string): string {
+/** Keeps spreadsheet programs from reading text such as "=x" as a formula. */
+function textCell(text: string): string {
   return /^[=+\-@\t\r]/.test(text) ? `'${text}` : text;
 }
 

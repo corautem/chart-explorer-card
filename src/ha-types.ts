@@ -45,6 +45,8 @@ export interface HomeAssistant {
   locale: FrontendLocale;
   language?: string;
   themes?: { darkMode?: boolean };
+  /** False while the websocket is down; Home Assistant sets it back to true after reconnecting. */
+  connected?: boolean;
   callWS<T>(msg: Record<string, unknown>): Promise<T>;
   connection: {
     subscribeMessage<T>(

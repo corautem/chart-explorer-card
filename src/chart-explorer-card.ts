@@ -275,6 +275,7 @@ export class ChartExplorerCard extends LitElement {
   }
 
   public set hass(hass: HomeAssistant) {
+    const back = this._hass?.connected === false && hass.connected === true;
     const first = !this._hass;
     this._hass = hass;
     this._syncLocale(hass);
@@ -290,6 +291,8 @@ export class ChartExplorerCard extends LitElement {
       this._applySpec(this._spec ?? this._config.defaultRange, false, 0);
       return;
     }
+    // States that changed while the connection was down are only in the recorder.
+    if (back && (this._error || containsNow(this._window, Date.now() - MINUTE))) this._scheduleLoad(0, true);
     if (changed.length) {
       this._appendLive(hass, changed);
       // Lists read from attributes, such as forecasts, are redrawn when their entity changes.

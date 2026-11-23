@@ -365,6 +365,31 @@ try {
     check('a refresh of a window that has not moved still applies', replaced);
     await context.close();
   }
+  {
+    // Home Assistant sets hass.connected to false while the websocket is down: reload when it comes back.
+    const { page, context } = await open('?only=1&live=0&delay=50');
+    await page.waitForFunction((sel) => document.querySelector(sel)?._data && !document.querySelector(sel)._loading, card());
+    await page.waitForTimeout(300);
+    const history = () => page.evaluate(() => window.__wsLog.filter((m) => m.type === 'history/history_during_period').length);
+    const a = await history();
+    await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      el.hass = { ...el.hass, connected: true };
+      el.hass = { ...el.hass, connected: true };
+    }, card());
+    await page.waitForTimeout(1000);
+    const b = await history();
+    await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      el.hass = { ...el.hass, connected: false };
+      el.hass = { ...el.hass, connected: true };
+    }, card());
+    await page.waitForTimeout(1000);
+    const c = await history();
+    check('a connection that stays up loads nothing', b === a, `${b - a} calls`);
+    check('the window reloads when the connection comes back', c - b === 1, `${c - b} calls`);
+    await context.close();
+  }
   // ---- Visual editor (with stand-ins for Home Assistant's form elements) ----
   {
     const { page, context, errors } = await open('?editor=1&only=1&live=0&delay=50', { width: 1400, height: 1400 });

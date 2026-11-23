@@ -310,6 +310,17 @@ try {
     const b = await page.evaluate(() => window.__calls);
     const message = await page.locator(`${card()} .message`).innerText().catch(() => '');
     check('failed loads while dragging stop instead of repeating', b - a <= 1 && message.includes('Retry'), `${b - a} calls in 2 s`);
+    // Back to the first range, which the first load still covers: the error goes without a new call.
+    const c = await page.evaluate((sel) => {
+      window.__mode = 'ok';
+      const el = document.querySelector(sel);
+      el._applySpec(el._config.defaultRange, false, 0);
+      return window.__calls;
+    }, card());
+    await page.waitForTimeout(500);
+    const gone = (await page.locator(`${card()} .message`).count()) === 0;
+    const d = await page.evaluate(() => window.__calls);
+    check('the error clears when the window shown has data', gone && d === c, `message gone ${gone}, ${d - c} calls`);
     await context.close();
   }
   {

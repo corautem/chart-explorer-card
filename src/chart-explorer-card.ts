@@ -542,7 +542,9 @@ export class ChartExplorerCard extends LitElement {
     if (!this._hass || !this._config || !this._window) return;
     const now = Date.now();
     if (!force && this._data && this._covers(this._data, this._window, now)) {
+      this._error = undefined;
       this._setLoading(false);
+      this.requestUpdate();
       this._requestDraw(true);
       return;
     }
@@ -670,6 +672,7 @@ export class ChartExplorerCard extends LitElement {
         if (id !== this._requestId) return;
         this._data = data;
         this._version++;
+        this._error = undefined;
         this.requestUpdate();
         this._requestDraw(true);
       })
@@ -691,7 +694,13 @@ export class ChartExplorerCard extends LitElement {
     if (!hass || !config) return;
     const now = Date.now();
     const rawSince = this._meta.rawSince(now);
-    if (this._data && this._covers(this._data, w, now)) return;
+    if (this._data && this._covers(this._data, w, now)) {
+      if (this._error) {
+        this._error = undefined;
+        this.requestUpdate();
+      }
+      return;
+    }
     if (this._extLoad) return;
     const resolution = chooseResolution(w, config.data, rawSince, now);
     const half = (w.end - w.start) / 2;

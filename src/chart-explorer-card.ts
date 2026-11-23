@@ -1910,6 +1910,7 @@ export class ChartExplorerCard extends LitElement {
       this._window = resolveWindow(spec, now, this._weekStart);
       if (this._data && !this._loading) {
         for (const entity of this._data.entities.values()) trimBefore(entity.raw, this._window.start);
+        for (const series of this._data.attributes?.values() ?? []) trimBefore(series, this._window.start);
         this._version++;
       }
       this._refreshPeriods(now);

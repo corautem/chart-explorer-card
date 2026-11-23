@@ -390,6 +390,26 @@ try {
     check('the window reloads when the connection comes back', c - b === 1, `${c - b} calls`);
     await context.close();
   }
+  {
+    // A rolling window drops old points on the minute tick, from attribute series as well as entity series.
+    const { page, context } = await open('?only=1&live=0&delay=50');
+    await page.evaluate((sel) => {
+      document.querySelector(sel).setConfig({ type: 'custom:chart-explorer-card', default_range: '24h', entities: [
+        'sensor.demo_flow_temperature',
+        { entity: 'planner.demo_import_rate', name: 'Low threshold', attribute: 'threshold' }] });
+    }, card());
+    await page.waitForFunction((sel) => document.querySelector(sel)._data?.attributes?.size > 0 && !document.querySelector(sel)._loading, card(), { timeout: 10000 });
+    const before = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      const old = el._window.start - 2 * 3600e3;
+      const series = [...el._data.entities.values()].map((e) => e.raw).concat([...el._data.attributes.values()]);
+      for (const x of series) for (const k of Object.keys(x)) if (Array.isArray(x[k])) x[k].unshift(k === 't' ? old : x[k][0]);
+      el._tick();
+      return series.map((x) => x.t.filter((t) => t < el._window.start).length);
+    }, card());
+    check('the minute tick trims attribute series too', before.every((n) => n <= 1), before.join(', '));
+    await context.close();
+  }
   // ---- Visual editor (with stand-ins for Home Assistant's form elements) ----
   {
     const { page, context, errors } = await open('?editor=1&only=1&live=0&delay=50', { width: 1400, height: 1400 });

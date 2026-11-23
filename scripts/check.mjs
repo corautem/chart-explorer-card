@@ -338,6 +338,33 @@ try {
     check('calls rejected at once do not freeze the page', answered);
     await context.close().catch(() => undefined);
   }
+  {
+    // A background refresh that returns after the user panned must not replace the panned data.
+    const { page, context } = await open('?only=1&live=0&delay=100');
+    await instrument(page);
+    await page.evaluate((sel) => {
+      window.__mode = 'slow';
+      document.querySelector(sel)._refresh();
+      window.__mode = 'ok';
+    }, card());
+    await drag(page);
+    await drag(page);
+    await page.waitForTimeout(3100);
+    const covers = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      return el._covers(el._data, el._window, Date.now());
+    }, card());
+    check('a late refresh does not replace the data of a window the user moved to', covers);
+    const replaced = await page.evaluate(async (sel) => {
+      const el = document.querySelector(sel);
+      const before = el._data;
+      el._refresh();
+      await new Promise((r) => setTimeout(r, 500));
+      return el._data !== before;
+    }, card());
+    check('a refresh of a window that has not moved still applies', replaced);
+    await context.close();
+  }
   // ---- Visual editor (with stand-ins for Home Assistant's form elements) ----
   {
     const { page, context, errors } = await open('?editor=1&only=1&live=0&delay=50', { width: 1400, height: 1400 });

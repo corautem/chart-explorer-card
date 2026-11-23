@@ -666,10 +666,12 @@ export class ChartExplorerCard extends LitElement {
     const w = this._window;
     if (!hass || !w || this._refreshing || this._loading || this._preview) return;
     const id = this._requestId;
+    const spec = this._spec;
     this._refreshing = true;
     this._fetch(hass, w, Date.now())
       .then((data) => {
-        if (id !== this._requestId) return;
+        // Gestures do not change _requestId, and the old period's data must not replace the panned data.
+        if (id !== this._requestId || spec !== this._spec || this._preview) return;
         this._data = data;
         this._version++;
         this._error = undefined;

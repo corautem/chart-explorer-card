@@ -700,9 +700,11 @@ export class ChartExplorerCard extends LitElement {
     this._extLoad = { window, resolution };
     this._gestureLoading = true;
     this.requestUpdate();
+    let ok = false;
     this._fetch(hass, window, now, resolution, this._bucketPeriod(w))
       .then((data) => {
         if (id !== this._requestId) return;
+        ok = true;
         this._data = data;
         this._version++;
         this._error = undefined;
@@ -716,7 +718,8 @@ export class ChartExplorerCard extends LitElement {
         this._gestureLoading = false;
         this.requestUpdate();
         const current = this._preview ?? this._window;
-        if (id === this._requestId && current) this._ensureCoverage(current);
+        // After a failure nothing has changed, so asking again would repeat without end.
+        if (ok && id === this._requestId && current) this._ensureCoverage(current);
       });
   }
 

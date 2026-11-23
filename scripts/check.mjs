@@ -49,6 +49,34 @@ async function activeQuick(page, n = 1) {
   await page.waitForTimeout(100);
   return text;
 }
+// Waits for the first card's first load, then wraps its callWS: window.__calls counts
+// calls and window.__mode makes them 'ok', 'fail' (after 20 ms), 'failnow' or 'slow' (1.5 s).
+async function instrument(page) {
+  await page.waitForFunction((sel) => document.querySelector(sel)?._data && !document.querySelector(sel)._loading, card());
+  await page.waitForTimeout(300);
+  await page.evaluate((sel) => {
+    const hass = document.querySelector(sel)._hass;
+    const original = hass.callWS.bind(hass);
+    window.__calls = 0;
+    window.__mode = 'ok';
+    hass.callWS = (msg) => {
+      window.__calls++;
+      if (window.__mode === 'fail') return new Promise((_, rej) => setTimeout(() => rej({ code: 'unknown_error', message: 'Simulated failure' }), 20));
+      if (window.__mode === 'failnow') return Promise.reject({ code: 'unknown_error', message: 'Simulated failure' });
+      if (window.__mode === 'slow') return new Promise((r) => setTimeout(r, 1500)).then(() => original(msg));
+      return original(msg);
+    };
+  }, card());
+}
+// Drags the first card's chart from one fraction of its width to another.
+async function drag(page, from = 0.1, to = 0.95) {
+  const box = await page.locator(`${card()} .chart-wrap`).boundingBox({ timeout: 5000 });
+  await page.mouse.move(box.x + box.width * from, box.y + box.height * 0.5);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * to, box.y + box.height * 0.5, { steps: 8 });
+  await page.mouse.up();
+}
+const within = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error(`timeout: ${what}`)), ms))]);
 try {
   // ---- Screenshots ----
   for (const theme of ['light', 'dark']) {
@@ -268,6 +296,36 @@ try {
     await page.screenshot({ path: `${OUT}/narrow-bottom-menu.png` });
     await page.screenshot({ path: `${OUT}/bottom-toolbar-menu.png` });
     await context.close();
+  }
+  {
+    // After a good first load, later loads fail: dragging must not start a request loop.
+    const { page, context } = await open('?only=1&live=0&delay=50');
+    await instrument(page);
+    await page.evaluate(() => (window.__mode = 'fail'));
+    await drag(page);
+    await drag(page);
+    await page.waitForTimeout(200);
+    const a = await page.evaluate(() => window.__calls);
+    await page.waitForTimeout(2000);
+    const b = await page.evaluate(() => window.__calls);
+    const message = await page.locator(`${card()} .message`).innerText().catch(() => '');
+    check('failed loads while dragging stop instead of repeating', b - a <= 1 && message.includes('Retry'), `${b - a} calls in 2 s`);
+    await context.close();
+  }
+  {
+    // The same with calls rejected at once, which used to freeze the page.
+    const { page, context } = await open('?only=1&live=0&delay=50');
+    let answered = false;
+    try {
+      await within(instrument(page), 5000, 'instrument');
+      await within(page.evaluate(() => (window.__mode = 'failnow')), 5000, 'mode');
+      await within(drag(page), 5000, 'drag');
+      answered = (await within(page.evaluate(() => 1), 2000, 'page')) === 1;
+    } catch {
+      answered = false;
+    }
+    check('calls rejected at once do not freeze the page', answered);
+    await context.close().catch(() => undefined);
   }
   // ---- Visual editor (with stand-ins for Home Assistant's form elements) ----
   {

@@ -410,6 +410,29 @@ try {
     check('the minute tick trims attribute series too', before.every((n) => n <= 1), before.join(', '));
     await context.close();
   }
+  {
+    // Bars, pies and heatmaps refresh the period in progress only while the card can be seen.
+    const { page, context } = await open('?only=6&live=0&delay=50');
+    await instrument(page);
+    const away = await page.evaluate(async (sel) => {
+      const el = document.querySelector(sel);
+      el._data.loadedAt -= 10 * 60e3;
+      el._setOnScreen(false);
+      const a = window.__calls;
+      el._tick();
+      await new Promise((r) => setTimeout(r, 500));
+      return window.__calls - a;
+    }, card());
+    const back = await page.evaluate(async (sel) => {
+      const a = window.__calls;
+      document.querySelector(sel)._setOnScreen(true);
+      await new Promise((r) => setTimeout(r, 500));
+      return window.__calls - a;
+    }, card());
+    check('no period refresh while the card is out of view', away === 0, `${away} calls`);
+    check('the period refresh runs when the card is back in view', back > 0, `${back} calls`);
+    await context.close();
+  }
   // ---- Visual editor (with stand-ins for Home Assistant's form elements) ----
   {
     const { page, context, errors } = await open('?editor=1&only=1&live=0&delay=50', { width: 1400, height: 1400 });

@@ -18,7 +18,7 @@ When statistics are drawn up to the present, the time after the newest bucket co
 
 New states arrive through the connection the dashboard already has; the card does not poll. Windows that include the present update as states change, at most every 10 seconds in lightweight mode.
 
-**Bars, pies and heatmaps** use one value per period from the long-term statistics: how much a meter rose (Home Assistant's `change`), or the average. Hours, days, weeks and months follow your device's time zone and week start. Home Assistant compiles statistics once an hour, so the hour in progress comes from raw history, and the current bar keeps growing; the card reloads it every 5 minutes in lightweight mode, every minute otherwise. Entities without statistics are averaged from raw history.
+**Bars, pies and heatmaps** use one value per period from the long-term statistics: how much a meter rose (Home Assistant's `change`), or the average. Hours, days, weeks and months follow your device's time zone and week start. Home Assistant compiles statistics once an hour, so the hour in progress comes from raw history, and the current bar keeps growing; the card reloads it every 5 minutes in lightweight mode, every minute otherwise, and waits while it is scrolled out of view or in a background tab. Entities without statistics are averaged from raw history.
 
 **States** come from raw history only, so timelines and heatmaps of states reach back as far as the recorder keeps it.
 

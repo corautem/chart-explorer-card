@@ -1930,6 +1930,8 @@ export class ChartExplorerCard extends LitElement {
 
   /** Bars, pies and heatmaps reload the period in progress every few minutes. */
   private _refreshPeriods(now: number): void {
+    // Not while unseen: _resume calls _tick when the card shows again, and the refresh runs then if due.
+    if (!this._canDraw()) return;
     const data = this._data;
     if (!data?.buckets) return;
     const every = this._config?.lightweight ? 5 * MINUTE : MINUTE;

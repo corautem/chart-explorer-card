@@ -208,7 +208,11 @@ export function fromForm(form: FormData, original: CardConfigInput, entities: En
     if (!isBlank(value) && !same(value, fallback)) out[key] = value;
   }
 
-  const toolbar = tidyRangeItems(form.quick_ranges ?? DEFAULT_QUICK_RANGES);
+  const tidied = tidyRangeItems(form.quick_ranges ?? DEFAULT_QUICK_RANGES);
+  // The card shows the buttons in the order written, so that order stays while the buttons are the same (and none repeat).
+  const written = original.quick_ranges;
+  const toolbar =
+    Array.isArray(written) && written.length === tidied.length && same(tidyRangeItems(written), tidied) ? written : tidied;
   if (!same(toolbar, tidyRangeItems(DEFAULT_QUICK_RANGES))) out.quick_ranges = toolbar;
   const menu = tidyMenuItems(form.presets ?? PRESET_IDS);
   if (!same(menu, [...PRESET_IDS])) out.presets = menu;

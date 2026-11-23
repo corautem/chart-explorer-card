@@ -55,6 +55,15 @@ describe('editor form data', () => {
     });
   });
 
+  it('keeps the toolbar order written in YAML while the buttons stay the same', () => {
+    const written = { ...base, quick_ranges: ['7d', '1h', 'today'] };
+    expect(fromForm(toForm(written), written, ['sensor.a']).quick_ranges).toEqual(['7d', '1h', 'today']);
+    const added = { ...toForm(written), quick_ranges: ['7d', '1h', 'today', '30d'] };
+    expect(fromForm(added, written, ['sensor.a']).quick_ranges).toEqual(['1h', '7d', '30d', 'today']);
+    const repeated = { ...base, quick_ranges: ['7d', '1h', '7d'] };
+    expect(fromForm(toForm(repeated), repeated, ['sensor.a']).quick_ranges).toEqual(['1h', '7d']);
+  });
+
   it('remembers custom lengths that are switched off, and drops them once switched on', () => {
     const off = fromForm({ ...toForm(base), unused_quick_ranges: ['45m'], unused_presets: ['6d'] }, base, ['sensor.a']);
     expect(off).toMatchObject({ unused_quick_ranges: ['45m'], unused_presets: ['6d'] });

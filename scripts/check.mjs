@@ -433,6 +433,33 @@ try {
     check('the period refresh runs when the card is back in view', back > 0, `${back} calls`);
     await context.close();
   }
+  {
+    // Leaving the page while a new range loads and coming back within a minute: the card loads that range.
+    const { page, context } = await open('?only=1&live=0&delay=50');
+    await instrument(page);
+    await page.evaluate(() => (window.__mode = 'slow'));
+    await quick(page, '7d');
+    const putBack = (sel) => {
+      const el = document.querySelector(sel);
+      const parent = el.parentNode;
+      el.remove();
+      parent.append(el);
+    };
+    await page.evaluate(putBack, card());
+    await page.waitForFunction((sel) => !document.querySelector(sel)._loading, card(), { timeout: 10000 });
+    const fits = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      return el._covers(el._data, el._window, Date.now());
+    }, card());
+    check('a card put back while a range loaded loads that range', fits);
+    await page.evaluate(() => (window.__mode = 'ok'));
+    const a = await page.evaluate(() => window.__calls);
+    await page.evaluate(putBack, card());
+    await page.waitForTimeout(500);
+    const b = await page.evaluate(() => window.__calls);
+    check('a card put back with data that fits loads nothing', b === a, `${b - a} calls`);
+    await context.close();
+  }
   // ---- Visual editor (with stand-ins for Home Assistant's form elements) ----
   {
     const { page, context, errors } = await open('?editor=1&only=1&live=0&delay=50', { width: 1400, height: 1400 });

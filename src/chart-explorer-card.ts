@@ -347,6 +347,11 @@ export class ChartExplorerCard extends LitElement {
     if (this._frame !== undefined) cancelAnimationFrame(this._frame);
     this._frame = undefined;
     this._requestId++;
+    // A load cut off here leaves the previous window's data under the new range; without it, connectedCallback loads again.
+    if (this._loading) {
+      this._data = undefined;
+      this._version++;
+    }
     this._setLoading(false);
     // Free the data a minute after the card leaves the page, unless it comes back.
     this._releaseTimer = window.setTimeout(() => {

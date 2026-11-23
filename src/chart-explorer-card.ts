@@ -2255,7 +2255,7 @@ export class ChartExplorerCard extends LitElement {
     const view = this._view(row);
     const faded = this._faded.has(row.key);
     const reading = this._reading(view);
-    // Without its name, the value's hover text and screen-reader label say whose value it is.
+    // Without its name, the value's hover text says whose value it is; the screen-reader label always does.
     const named = row.showName && this._config?.showNames !== false;
     const title = reading.title ?? t('more_info');
     return html`
@@ -2264,7 +2264,7 @@ export class ChartExplorerCard extends LitElement {
           class="value ${reading.numeric ? '' : 'text'}"
           style=${reading.color ? `color:${reading.color}` : nothing}
           title=${named ? title : `${view.name}: ${title}`}
-          aria-label=${named ? nothing : `${view.name} ${reading.text}${reading.unit ? ` ${reading.unit}` : ''}`}
+          aria-label=${`${view.name} ${reading.text}${reading.unit ? ` ${reading.unit}` : ''}`}
           @click=${() => this._moreInfo(row)}
         >
           ${reading.text}${reading.unit ? html`<span class="unit">${reading.unit}</span>` : nothing}
@@ -2273,6 +2273,7 @@ export class ChartExplorerCard extends LitElement {
           ? html`<button
               class="name"
               title=${t('fade')}
+              aria-label=${`${view.name}: ${t('fade')}`}
               aria-pressed=${faded ? 'true' : 'false'}
               @click=${() => this._toggleFade(row)}
             >

@@ -460,6 +460,19 @@ try {
     check('a card put back with data that fits loads nothing', b === a, `${b - a} calls`);
     await context.close();
   }
+  {
+    // Screen readers hear whose value each legend button shows, and what the name button does.
+    const { page, context } = await open('?only=1&live=0');
+    const name = page.locator(`${card()} .item .name`).first();
+    await name.waitFor();
+    const entity = (await name.textContent()).trim();
+    const valueLabel = (await page.locator(`${card()} .item .value`).first().getAttribute('aria-label')) ?? '';
+    const nameLabel = (await name.getAttribute('aria-label')) ?? '';
+    const action = (await name.getAttribute('title')) ?? '';
+    check('a legend value button names its entity', entity !== '' && valueLabel.includes(entity), valueLabel);
+    check('a legend name button names its entity and the action', nameLabel.includes(entity) && action !== '' && nameLabel.includes(action), nameLabel);
+    await context.close();
+  }
   // ---- Visual editor (with stand-ins for Home Assistant's form elements) ----
   {
     const { page, context, errors } = await open('?editor=1&only=1&live=0&delay=50', { width: 1400, height: 1400 });

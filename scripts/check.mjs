@@ -485,6 +485,21 @@ try {
     check('a card with animation on animates', (await animated({})) === true);
     check('reduced motion turns the animation off', (await animated({ reducedMotion: 'reduce' })) === false);
   }
+  {
+    // Legend names are at least 24 px tall on touch screens; the desktop legend keeps its size.
+    const heights = async (viewport, extra) => {
+      const { page, context } = await open('?only=1&live=0', viewport, extra);
+      await page.locator(`${card()} .item .name`).first().waitFor();
+      const coarse = await page.evaluate(() => matchMedia('(pointer: coarse)').matches);
+      const all = await page.locator(`${card()} .item .name`).evaluateAll((els) => els.map((el) => el.getBoundingClientRect().height));
+      await context.close();
+      return { coarse, all };
+    };
+    const touch = await heights({ width: 390, height: 900 }, { hasTouch: true, isMobile: true });
+    check('legend names are at least 24 px tall on touch screens', touch.coarse && touch.all.length > 0 && touch.all.every((h) => h >= 24), touch.all.map((h) => h.toFixed(1)).join(' '));
+    const desk = await heights();
+    check('legend names keep their size on desktop', !desk.coarse && desk.all.length > 0 && desk.all.every((h) => h < 24), desk.all.map((h) => h.toFixed(1)).join(' '));
+  }
   // ---- Visual editor (with stand-ins for Home Assistant's form elements) ----
   {
     const { page, context, errors } = await open('?editor=1&only=1&live=0&delay=50', { width: 1400, height: 1400 });

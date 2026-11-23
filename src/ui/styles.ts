@@ -364,6 +364,12 @@ export const cardStyles = css`
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  /* WCAG 2.2 asks for targets at least 24 px high; a button keeps its text centred. */
+  @media (pointer: coarse) {
+    .item .name {
+      min-height: 24px;
+    }
+  }
   .item.faded .value {
     opacity: 0.45;
   }

@@ -309,11 +309,14 @@ export const cardStyles = css`
     white-space: nowrap;
     line-height: 1.2;
   }
+  /* The series colour as a bar beside the item, so the value can be in the text colour, which reads on any background. */
   .item {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     min-width: 0;
+    border-left: 3px solid var(--item-color);
+    padding-left: 6px;
   }
   .item button {
     height: auto;
@@ -322,7 +325,7 @@ export const cardStyles = css`
     text-align: left;
   }
   .item .value {
-    color: var(--item-color);
+    color: var(--primary-text-color);
     font-size: var(--value-size, 22px);
     font-weight: 500;
     line-height: 1.2;

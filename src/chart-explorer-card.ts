@@ -1260,6 +1260,11 @@ export class ChartExplorerCard extends LitElement {
     return this._onScreen && document.visibilityState === 'visible' && this.isConnected;
   }
 
+  /** The animation option, off while the device asks for reduced motion. */
+  private _animate(): boolean {
+    return Boolean(this._config?.animation) && !matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
   private _requestDraw(immediate = false): void {
     this._dirty = true;
     if (!this._chart || !this._canDraw()) return;
@@ -1490,7 +1495,7 @@ export class ChartExplorerCard extends LitElement {
       theme,
       fadedOpacity: config.fadedOpacity,
       fadeRescale: config.fadeRescale,
-      animation: config.animation && !this._preview,
+      animation: this._animate() && !this._preview,
       showNowLine: config.showNowLine,
       xAxis: config.xAxis,
       yAxis: config.yAxis,
@@ -1636,7 +1641,7 @@ export class ChartExplorerCard extends LitElement {
       splitNumber: Math.max(2, Math.round(width / 110)),
       xAxis: config.xAxis,
       yAxis: config.yAxis,
-      animation: config.animation && !this._preview,
+      animation: this._animate() && !this._preview,
       axisTime: (ms) => this._times.axisLabel(ms, length),
       cursorTime: (ms) => this._times.cursorLabel(ms, length, true),
       hourLabel: (hour) => this._times.hourLabel(hour),
@@ -1678,7 +1683,7 @@ export class ChartExplorerCard extends LitElement {
         pies,
         donut: config.chartType === 'donut',
         theme,
-        animation: config.animation,
+        animation: this._animate(),
         hover: !config.lightweight,
         width: chart.getWidth() || this._chartWidth || 600,
         height: chart.getHeight() || config.height,

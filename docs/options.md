@@ -58,7 +58,7 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | `fade_rescale` | `false` | `true` rescales the y-axis to the lines that are not faded. |
 | `tooltip` | `false` | `true` adds a floating box with the values beside the cursor line. The values row then keeps showing the current values instead of following the cursor. |
 | `lightweight` | `true` | Lightweight mode: no animations, live redraws at most every 10 seconds. `false` allows animations and redraws up to once a second. |
-| `animation` | off in lightweight mode | Turns animations on or off regardless of `lightweight`. |
+| `animation` | off in lightweight mode | Turns animations on or off regardless of `lightweight`. Stays off on devices set to reduce motion. |
 | `show_now_line` | `true` | Thin dashed line at the present. |
 | `x_axis_show` | `true` | Time labels under the chart. |
 | `x_axis_label_size` | `11` | Time label size in pixels. |

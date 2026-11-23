@@ -473,6 +473,18 @@ try {
     check('a legend name button names its entity and the action', nameLabel.includes(entity) && action !== '' && nameLabel.includes(action), nameLabel);
     await context.close();
   }
+  {
+    // A card set to animate stays still when the device asks for reduced motion.
+    const animated = async (extra) => {
+      const { page, context } = await open('?only=3&live=0', undefined, extra);
+      await page.waitForFunction((sel) => document.querySelector(sel)?._chart?.getOption()?.series?.length, card(), { timeout: 10000 });
+      const on = await page.evaluate((sel) => document.querySelector(sel)._chart.getOption().animation, card());
+      await context.close();
+      return on;
+    };
+    check('a card with animation on animates', (await animated({})) === true);
+    check('reduced motion turns the animation off', (await animated({ reducedMotion: 'reduce' })) === false);
+  }
   // ---- Visual editor (with stand-ins for Home Assistant's form elements) ----
   {
     const { page, context, errors } = await open('?editor=1&only=1&live=0&delay=50', { width: 1400, height: 1400 });

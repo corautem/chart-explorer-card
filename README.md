@@ -54,7 +54,7 @@ The button opens the card's page in HACS on your Home Assistant, after asking to
 1. Download both files from the [latest release](https://github.com/corautem/chart-explorer-card/releases/latest): `chart-explorer-card.js` (the card) and `chart-explorer-card-editor.js` (the visual editor, loaded only when you edit a card).
 2. Copy them into your Home Assistant configuration folder, in `/config/www/chart-explorer-card/`.
 3. In Home Assistant, open **Settings → Dashboards**, then the three-dot menu → **Resources** → **Add resource**. (The Resources entry appears only with **Advanced mode** on in your user profile.)
-   - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.8.3`
+   - URL: `/local/chart-explorer-card/chart-explorer-card.js?v=0.8.4`
    - Type: **JavaScript module**
 4. Reload the browser.
 

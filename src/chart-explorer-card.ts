@@ -56,7 +56,7 @@ import { buttonLabel, menuLabel, presetName, t, type StringKey } from './localiz
 import { icon } from './ui/icons';
 import { cardStyles } from './ui/styles';
 
-const VERSION = '0.8.3';
+const VERSION = '0.8.4';
 // The chart's inner edge and ECharts' gap between numbers and the plot, in pixels.
 const GRID_EDGE = 4;
 const LABEL_MARGIN = 8;

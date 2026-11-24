@@ -1047,6 +1047,54 @@ try {
     check('W and kW share one scale', scale.scales === 1 && scale.houseAxis === 0, JSON.stringify(scale));
     check('the W sensor is drawn in kW', scale.max > 0 && scale.max < 5, String(scale.max));
     check('the W sensor\'s value keeps its own unit', /W$/.test(houseValue) && !/kW$/.test(houseValue), houseValue);
+    // The tooltip lists only the lines drawn at the cursor; a list has no value after its last period.
+    const forecastConfig = (tooltip) => ({
+      type: 'custom:chart-explorer-card',
+      default_range: 'today+72h',
+      tooltip,
+      entities: [
+        { entity: 'sensor.demo_solar_power', name: 'Solar power', color: '#f5a623' },
+        {
+          entity: 'sensor.demo_pv_forecast',
+          color: '#9e9e9e',
+          attribute: {
+            name: 'detailedForecast',
+            values: [
+              { key: 'pv_estimate', name: 'Forecast', line_style: 'dashed' },
+              { key: 'pv_estimate90', name: 'Forecast 90%', line_style: 'none', fill: 'pv_estimate10', show_in_header: false },
+            ],
+          },
+        },
+      ],
+    });
+    const day0 = new Date();
+    day0.setHours(0, 0, 0, 0);
+    const tomorrowNoon = day0.getTime() + 36 * 3600000;
+    const dayAfterNoon = day0.getTime() + 60 * 3600000;
+    const hoverAt = async (time) => {
+      const at = await page.evaluate(([sel, time]) => {
+        const el = document.querySelector(sel);
+        const box = el.shadowRoot.querySelector('.chart').getBoundingClientRect();
+        return { x: box.left + Number(el._chart.convertToPixel({ xAxisIndex: 0 }, time)), y: box.top + box.height / 2 };
+      }, [card(), time]);
+      await page.mouse.move(at.x, at.y);
+      await page.waitForTimeout(200);
+    };
+    const tooltipRows = () => page.locator(`${card()} .tooltip .tooltip-name`).allInnerTexts();
+    await page.evaluate(([sel, config]) => document.querySelector(sel).setConfig(config), [card(), forecastConfig(true)]);
+    await page.waitForTimeout(1500);
+    await hoverAt(tomorrowNoon);
+    const tomorrowRows = await tooltipRows();
+    check('the tooltip tomorrow lists the forecast and leaves out the measurement', tomorrowRows.join('|') === 'Forecast|Forecast 90%', tomorrowRows.join(' | '));
+    await hoverAt(dayAfterNoon);
+    const laterRows = await tooltipRows();
+    check('the tooltip after the list ends has no rows', laterRows.length === 0, laterRows.join(' | '));
+    await page.evaluate(([sel, config]) => document.querySelector(sel).setConfig(config), [card(), forecastConfig(false)]);
+    await page.waitForTimeout(1500);
+    await hoverAt(dayAfterNoon);
+    const laterValues = (await page.locator(`${card()} .item .value`).allInnerTexts()).map((v) => v.trim());
+    check('the values row shows no forecast after the list ends', laterValues[1]?.startsWith('-'), laterValues.join(' | '));
+    await page.mouse.move(0, 0);
     check('forecast page loads without errors', errors.length === 0, errors.join(' | '));
     await context.close();
   }

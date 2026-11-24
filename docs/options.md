@@ -57,7 +57,7 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | `height` | `250` | Chart height in pixels. Timeline strips add their own height under it. |
 | `faded_opacity` | `0.1` | Opacity of a faded line, from 0 to 1. |
 | `fade_rescale` | `false` | `true` rescales the y-axis to the lines that are not faded. |
-| `tooltip` | `false` | `true` adds a floating box with the values beside the cursor line. The values row then keeps showing the current values instead of following the cursor. |
+| `tooltip` | `false` | `true` adds a floating box beside the cursor line with the value of each line drawn at that moment. Entities shown only in the values row, and lines with nothing at that moment (a forecast for another day, a measurement after now), are left out. The values row then keeps showing the current values instead of following the cursor. |
 | `lightweight` | `true` | Lightweight mode: no animations, live redraws at most every 10 seconds. `false` allows animations and redraws up to once a second. |
 | `animation` | off in lightweight mode | Turns animations on or off regardless of `lightweight`. Stays off on devices set to reduce motion. |
 | `show_now_line` | `true` | Thin dashed line at the present. |

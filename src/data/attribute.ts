@@ -1,5 +1,5 @@
 import type { AttributeSource } from '../config';
-import { indexAtOrAfter, indexAtOrBefore } from './series';
+import { indexAtOrAfter, indexAtOrBefore, valueAt } from './series';
 
 /** One value read from each item of an attribute's list, with the items' times. */
 export interface AttributeSeries {
@@ -88,6 +88,16 @@ export function sliceSeries(series: AttributeSeries, start: number, end: number)
   const after = indexAtOrAfter(series.t, end);
   const to = after < 0 || after >= series.t.length ? series.t.length : after + 1;
   return { t: series.t.slice(from, to), v: series.v.slice(from, to) };
+}
+
+/**
+ * A list's value at `time`, or NaN before its first item and after its last period, where
+ * its line ends. The last period is taken to be as long as the one before it.
+ */
+export function listValueAt(series: AttributeSeries, time: number): number {
+  const n = series.t.length;
+  const step = n > 1 ? series.t[n - 1] - series.t[n - 2] : Infinity;
+  return n && time >= series.t[n - 1] + step ? NaN : valueAt(series, time);
 }
 
 /** The name the editor gives the single value of a map of times or of [time, value] pairs. */

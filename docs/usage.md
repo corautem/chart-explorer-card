@@ -45,7 +45,7 @@ Each entity shows its value in its line's colour, made darker or lighter where t
 
 - Tap a value to open the entity's details (more-info).
 - Tap a name to fade the line, bars or strip (drawn at `faded_opacity`, 10 % by default) and strike the name through. Tap again to bring it back. Faded entities are left out of the CSV, and out of a pie.
-- While you hover over or tap the chart, the values change to the readings at that moment, and a vertical line shows the time on the axis. With the floating tooltip on (`tooltip: true`), the tooltip shows those readings and the values row keeps the current ones:
+- While you hover over or tap the chart, the values change to the readings at that moment, and a vertical line shows the time on the axis. With the floating tooltip on (`tooltip: true`), the tooltip shows the readings of the lines drawn at that moment and the values row keeps the current ones:
 
   ![A dark card with three temperature lines, a box beside the cursor listing each value at that moment, and the current values under the chart](images/tooltip.png)
 

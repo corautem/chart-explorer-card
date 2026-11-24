@@ -21,7 +21,7 @@ import { addUnits, followsCalendar, slides, startOfUnit } from './time/range';
 import { resolveWeekStart } from './time/week';
 import { MetaCache, WindowCache, cacheKey, canReuse, entityKey, loadWindow, mergeShifted, rawFrom, seriesFor, type LoadInput } from './data/loader';
 import { bucketAt, bucketPeriodFor, bucketValues, periodEdges, windowValue } from './data/buckets';
-import { attributeSeries, isListValue, sliceSeries, suggestedListUnit, type AttributeSeries } from './data/attribute';
+import { attributeSeries, isListValue, listValueAt, sliceSeries, suggestedListUnit, type AttributeSeries } from './data/attribute';
 import { attributeKey } from './data/history';
 import { ratioPeriods, runningRatio, windowRatio, type RatioPart, type RatioPeriods } from './data/ratio';
 import { inCommonUnits, sameFamily, unitFactor } from './units';
@@ -1184,7 +1184,7 @@ export class ChartExplorerCard extends LitElement {
     }
     if (row.attribute) {
       // A forecast has values after the present: the row shows the one now, or at the cursor.
-      const reading = this._numberReading(view, valueAt(this._attribute(row), cursor ?? Date.now()));
+      const reading = this._numberReading(view, listValueAt(this._attribute(row), cursor ?? Date.now()));
       return cursor === undefined ? { ...reading, title: this._title(row) } : reading;
     }
     if (this._usesBuckets(row)) {
@@ -1771,7 +1771,7 @@ export class ChartExplorerCard extends LitElement {
     }
     const buckets = this._usesBuckets(row) ? this._buckets(row) : undefined;
     const value = this._attributeList(row)
-      ? valueAt(this._attribute(row), ms)
+      ? listValueAt(this._attribute(row), ms)
       : buckets
         ? bucketAt(buckets, ms)
         : ms > this._latest(row)
@@ -2331,9 +2331,14 @@ export class ChartExplorerCard extends LitElement {
     const x = Number(chart.convertToPixel({ xAxisIndex: 0 }, time));
     if (!Number.isFinite(x)) return nothing;
     const onLeft = x > chart.getWidth() / 2;
+    // Only lines drawn at the cursor: a forecast for another day or a measurement in the future would add a dash.
     const rows = config.entities
-      .filter((row) => !this._faded.has(row.key))
-      .map((row) => this._view(row));
+      .filter((row) => row.showInChart && !this._faded.has(row.key))
+      .map((row) => {
+        const view = this._view(row);
+        return { view, text: this._textAt(view, time) };
+      })
+      .filter(({ text }) => text !== '-');
     const length = (this._window?.end ?? 0) - (this._window?.start ?? 0);
     const dateOnly = this._data.resolution === 'day' || this._data.resolution === 'week';
     return html`<div
@@ -2342,9 +2347,9 @@ export class ChartExplorerCard extends LitElement {
     >
       <div class="tooltip-time">${this._times.cursorLabel(time, length, dateOnly)}</div>
       ${rows.map(
-        (view) => html`<div class="tooltip-row">
+        ({ view, text }) => html`<div class="tooltip-row">
           <span class="key" style=${`background:${this._keyColor(view, time)}`}></span
-          ><span class="tooltip-name">${view.name}</span><b>${this._textAt(view, time)}</b>
+          ><span class="tooltip-name">${view.name}</span><b>${text}</b>
         </div>`,
       )}
     </div>`;

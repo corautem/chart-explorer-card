@@ -3,6 +3,7 @@ import {
   attributeSeries,
   automaticValueKey,
   hasKnownTimeKey,
+  listValueAt,
   itemKeys,
   listAttributes,
   numberKeys,
@@ -237,5 +238,23 @@ describe('the values section of the editor', () => {
     expect(chosen).not.toContain('"name":"line_style"');
     expect(chosen).not.toContain('"name":"statistic"');
     expect(names(entitySchema('line', 'line', [], { attributes: ['a'], keys: ['moment'], chosen: 'a', showTime: true }))).toContain('attribute_time');
+  });
+});
+
+describe('a value from a list at a time', () => {
+  const MIN = 60000;
+  const list = { t: [0, 30 * MIN, 60 * MIN], v: [1, 2, 3] };
+  it('holds each value until the next item, and the last one for one more period', () => {
+    expect(listValueAt(list, 45 * MIN)).toBe(2);
+    expect(listValueAt(list, 60 * MIN)).toBe(3);
+    expect(listValueAt(list, 89 * MIN)).toBe(3);
+  });
+  it('has none before the first item or once the last period is over', () => {
+    expect(listValueAt(list, -1)).toBeNaN();
+    expect(listValueAt(list, 90 * MIN)).toBeNaN();
+    expect(listValueAt({ t: [], v: [] }, 0)).toBeNaN();
+  });
+  it('keeps a single value after its time, as before', () => {
+    expect(listValueAt({ t: [0], v: [5] }, 86400000)).toBe(5);
   });
 });

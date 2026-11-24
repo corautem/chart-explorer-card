@@ -177,7 +177,7 @@ entities:
 |---|---|
 | `name` | The attribute that holds the list. |
 | `time` | The key with each item's time, as ISO text or epoch seconds or milliseconds. Found automatically when it is `period_start`, `start`, `start_time`, `datetime`, `time`, `from` or `date`. |
-| `values` | The numbers to draw, each a line of its own with `key` and optionally `name`, `color`, `line_style`, `fill` (`zero`, or another key to shade the range up to it), `fill_opacity` (0 to 1) and `show_in_header`. Without `values`, the list's only number is drawn. |
+| `values` | The numbers to draw, each a line of its own with `key` and optionally `name`, `color`, `line_style`, `curve` and `width` (both default to the entity's), `fill` (`zero`, or another key to shade the range up to it), `fill_opacity` (0 to 1) and `show_in_header`. Without `values`, the list's only number is drawn. |
 
 Items can also be `[time, value]` pairs, and the attribute can be a map of times to values, such as Predbat's `results`. The editor offers both with a single value called `value`; in YAML, `values: [{ key: value }]`. The form from version 0.8.0 (`value`, `low` and `high`) still works.
 

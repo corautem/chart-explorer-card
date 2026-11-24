@@ -143,6 +143,13 @@ describe('card line width', () => {
     expect(widths(normalizeConfig({ line_width: 3, entities: [{ ...forecast, width: 1 }] }))).toEqual([1, 4]);
   });
 
+  it('reaches list values whose width or curve is left empty', () => {
+    const forecast = (value: object) => ({ entity: 'sensor.demo_forecast', attribute: { name: 'forecast', values: [{ key: 'a', ...value }] } });
+    expect(widths(normalizeConfig({ line_width: 3, entities: [forecast({ width: null })] }))).toEqual([3]);
+    expect(widths(normalizeConfig({ entities: [{ ...forecast({ width: '' }), width: 1 }] }))).toEqual([1]);
+    expect(normalizeConfig({ entities: [{ ...forecast({ curve: null }), curve: 'step' }] }).entities[0].curve).toBe('step');
+  });
+
   it('must be above 0 and stays 2 when unset', () => {
     expect(() => normalizeConfig({ line_width: 0, entities: ['sensor.demo_a'] })).toThrow('line_width must be greater than 0.');
     expect(widths(normalizeConfig({ entities: ['sensor.demo_a', 'sensor.demo_b'] }))).toEqual([2, 2]);

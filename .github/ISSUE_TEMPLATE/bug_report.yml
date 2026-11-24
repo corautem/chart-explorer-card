@@ -41,8 +41,8 @@ body:
     id: version
     attributes:
       label: Card version
-      description: Shown in HACS, and in the browser console as CHART-EXPLORER-CARD followed by the version.
-      placeholder: "0.8.3"
+      description: Shown in the browser console as CHART-EXPLORER-CARD followed by the version, and in HACS.
+      placeholder: "0.8.4"
     validations:
       required: true
   - type: dropdown
@@ -50,6 +50,7 @@ body:
     attributes:
       label: Installed through
       options:
+        - Marketplace
         - HACS
         - By hand
     validations:

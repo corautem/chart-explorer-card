@@ -35,18 +35,28 @@ A picture and an example for each: [Chart types](docs/chart-types.md).
 
 ## Installing
 
-### HACS
+### Marketplace or HACS
 
-From Home Assistant 2026.11, HACS is built in as the **Marketplace**.
+From Home Assistant 2026.11, HACS is built in as the **Marketplace**, under **Settings** > **Marketplace**. On older versions, use HACS.
 
-[![Open this repository in HACS on your Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=corautem&repository=chart-explorer-card&category=plugin)
+[![Open this repository in the Marketplace or HACS on your Home Assistant](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=corautem&repository=chart-explorer-card&category=plugin)
 
-The button opens the card's page in HACS on your Home Assistant, after asking to add it as a custom repository. Select **Download** there and reload the browser. Or add it yourself:
+The button opens the card's page on your Home Assistant. Select **Install** in the Marketplace, or **Download** in HACS, and reload the browser. Or add it yourself in the Marketplace:
+
+1. Open **Settings** > **Marketplace**, then **Add from link** in the upper-right corner.
+2. Paste `https://github.com/corautem/chart-explorer-card` and select **Add**. If GitHub isn't connected yet, the Marketplace asks you to connect it first.
+3. Open **Chart Explorer Card**, select **Install**, then **Install** again in the dialog. The Marketplace adds the resource entry.
+4. Reload the browser.
+
+<details>
+<summary><b>In HACS, on Home Assistant 2026.10 and older</b></summary>
 
 1. In Home Assistant, open **HACS**, then the three-dot menu → **Custom repositories**.
 2. Paste `https://github.com/corautem/chart-explorer-card`, choose the type **Dashboard**, and select **Add**.
 3. Find **Chart Explorer Card** in HACS, open it and select **Download**. HACS adds the resource entry.
 4. Reload the browser.
+
+</details>
 
 <details>
 <summary><b>By hand</b></summary>

@@ -43,6 +43,7 @@ export const DEFAULTS: Readonly<Record<string, unknown>> = {
   show_names: true,
   value_size: 22,
   name_size: 12,
+  line_width: 2,
   show_now_line: true,
   y_padding_top: 5,
   y_padding_bottom: 5,
@@ -113,6 +114,7 @@ const ORDER = [
   'x_padding_left',
   'x_padding_right',
   'tooltip',
+  'line_width',
   'faded_opacity',
   'fade_rescale',
   'x_axis_show',
@@ -253,7 +255,7 @@ export function fromForm(form: FormData, original: CardConfigInput, entities: En
 
 // ---- Entities ----
 
-const ENTITY_DEFAULTS = { curve: 'smooth', width: 2, fill: false, show_in_header: true, show_unit: true, show_name: true, show_in_chart: true };
+const ENTITY_DEFAULTS = { curve: 'smooth', fill: false, show_in_header: true, show_unit: true, show_name: true, show_in_chart: true };
 // state_colors is not listed: the state colour form edits it, and the main form keeps it as it is.
 const ENTITY_KEYS = [
   'entity',
@@ -296,12 +298,13 @@ export function pickedColor(rgb: number[], original: string | undefined, automat
 }
 
 /** Form data for one entity, with its current (or default) colour as RGB. */
-export function entityToForm(item: EntityItem, defaultColor: string): FormData {
+export function entityToForm(item: EntityItem, defaultColor: string, lineWidth = 2): FormData {
   const e: EntityConfigInput = typeof item === 'string' ? { entity: item } : item;
   const source = typeof e.attribute === 'string' ? { name: e.attribute } : e.attribute;
   return {
     ...ENTITY_DEFAULTS,
     ...e,
+    width: e.width ?? lineWidth,
     attribute: undefined,
     divide_by: e.divide_by === undefined ? [] : [e.divide_by].flat(),
     add: e.add === undefined ? [] : [e.add].flat(),
@@ -318,7 +321,7 @@ export function entityToForm(item: EntityItem, defaultColor: string): FormData {
 }
 
 /** Back to the shortest config for one entity: a plain ID when nothing else is set. */
-export function entityFromForm(form: FormData, original: EntityItem, defaultColor: string): EntityItem {
+export function entityFromForm(form: FormData, original: EntityItem, defaultColor: string, lineWidth = 2): EntityItem {
   const base: Record<string, unknown> = typeof original === 'string' ? {} : { ...original };
   const out: Record<string, unknown> = { entity: String(form.entity ?? entityId(original)) };
   if (typeof form.attribute_name === 'string' && form.attribute_name) {
@@ -351,7 +354,7 @@ export function entityFromForm(form: FormData, original: EntityItem, defaultColo
   if (form.fill === true && typeof form.fill_opacity === 'number' && Number.isFinite(form.fill_opacity)) {
     out.fill_opacity = Math.min(100, Math.max(0, form.fill_opacity)) / 100;
   }
-  if (typeof form.width === 'number' && form.width !== ENTITY_DEFAULTS.width) out.width = form.width;
+  if (typeof form.width === 'number' && form.width !== lineWidth) out.width = form.width;
   if (form.y_axis && form.y_axis !== 'auto') out.y_axis = form.y_axis;
   if (typeof form.decimals === 'number' && Number.isFinite(form.decimals)) out.decimals = form.decimals;
   if (typeof form.multiply === 'number' && Number.isFinite(form.multiply) && form.multiply !== 0 && form.multiply !== 1) {
@@ -410,6 +413,7 @@ export const LABELS: Record<string, string> = {
   x_padding_left: 'Space before the start',
   x_padding_right: 'Space after the end',
   tooltip: 'Floating tooltip beside the cursor',
+  line_width: 'Line width',
   faded_opacity: 'Faded line opacity',
   fade_rescale: 'Rescale the axis when a line is faded',
   x_axis_show: 'Show time labels',
@@ -470,6 +474,7 @@ export const HELPERS: Record<string, string> = {
   value_position: 'Where each value sits relative to its entity name.',
   values_color: "Where each entity's colour shows in the values row. Text in the colour is made darker or lighter where the plain colour would be hard to read.",
   name_align: 'How each name lines up with its value when one sits above the other.',
+  line_width: "For every line on the card. A width set on an entity's page applies to that entity instead.",
   faded_opacity: 'How visible a line stays after you tap its name.',
   show_range_label: 'The window shown, such as Mon 26 Oct 00:00 - Sun 1 Nov 23:59. Turned off, its space stays empty for a clean look; Custom… stays in the Presets menu.',
   show_quick_ranges: 'At the top of the Presets menu.',
@@ -631,6 +636,7 @@ const GRID_OPTIONS: Option[] = [
 ];
 
 export const CHART_SCHEMA: unknown[] = [
+  { name: 'line_width', selector: number(0.5, 8, 0.5, 'px', 'slider') },
   { name: 'faded_opacity', selector: number(0, 100, 5, '%', 'slider') },
   { name: 'show_now_line', selector: { boolean: {} } },
   { name: 'tooltip', selector: { boolean: {} } },
@@ -722,6 +728,7 @@ export const ADD_ENTITY_SCHEMA: unknown[] = [{ name: 'entity', selector: { entit
 
 /** Explanations on the entity page where they differ from the card-wide ones. */
 export const ENTITY_HELPERS: Record<string, string> = {
+  width: "Starts at the card's line width (Visual tab, Chart). A different width here applies to this entity only.",
   statistic:
     'Same as the card follows the Advanced tab. Highest keeps short peaks visible on long windows; lowest shows the dips. Meter reading is for energy and water meters only; lowest and highest are for measurements only.',
 };

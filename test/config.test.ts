@@ -129,3 +129,22 @@ describe('configuration', () => {
     expect(c.fadedOpacity).toBe(1);
   });
 });
+
+describe('card line width', () => {
+  const widths = (c: ReturnType<typeof normalizeConfig>) => c.entities.map((e) => e.width);
+
+  it('is the width of every entity without its own', () => {
+    expect(widths(normalizeConfig({ line_width: 3, entities: ['sensor.demo_a', { entity: 'sensor.demo_b', width: 1 }] }))).toEqual([3, 1]);
+  });
+
+  it('reaches list values through their entity', () => {
+    const forecast = { entity: 'sensor.demo_forecast', attribute: { name: 'forecast', values: [{ key: 'a' }, { key: 'b', width: 4 }] } };
+    expect(widths(normalizeConfig({ line_width: 3, entities: [forecast] }))).toEqual([3, 4]);
+    expect(widths(normalizeConfig({ line_width: 3, entities: [{ ...forecast, width: 1 }] }))).toEqual([1, 4]);
+  });
+
+  it('must be above 0 and stays 2 when unset', () => {
+    expect(() => normalizeConfig({ line_width: 0, entities: ['sensor.demo_a'] })).toThrow('line_width must be greater than 0.');
+    expect(widths(normalizeConfig({ entities: ['sensor.demo_a', 'sensor.demo_b'] }))).toEqual([2, 2]);
+  });
+});

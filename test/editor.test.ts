@@ -190,6 +190,34 @@ describe('editor entity data', () => {
   });
 });
 
+describe('editor card line width', () => {
+  const blue = '#2a78d6';
+
+  it('saves the card width only when it is not 2', () => {
+    const wide = { ...base, line_width: 3 };
+    expect(fromForm(toForm(wide), wide, ['sensor.a']).line_width).toBe(3);
+    const plain = { ...base, line_width: 2 };
+    expect(fromForm(toForm(plain), plain, ['sensor.a'])).not.toHaveProperty('line_width');
+  });
+
+  it('starts an entity at the card width and saves none for it', () => {
+    const form = entityToForm('sensor.demo_a', blue, 3);
+    expect(form.width).toBe(3);
+    expect(entityFromForm(form, 'sensor.demo_a', blue, 3)).toBe('sensor.demo_a');
+  });
+
+  it("keeps an entity's own width of 2 under a card width of 3", () => {
+    const original = { entity: 'sensor.demo_a', width: 2 };
+    expect(entityFromForm(entityToForm(original, blue, 3), original, blue, 3)).toEqual({ entity: 'sensor.demo_a', width: 2 });
+  });
+
+  it('drops an entity width equal to the card width', () => {
+    const original = { entity: 'sensor.demo_a', width: 2 };
+    const form = { ...entityToForm(original, blue, 3), width: 3 };
+    expect(entityFromForm(form, original, blue, 3)).toBe('sensor.demo_a');
+  });
+});
+
 describe('editor layout', () => {
   type Field = { name?: string; type?: string; schema?: Field[]; selector?: Record<string, { mode?: string }> };
   // Home Assistant draws these kinds at different heights; a row may only hold one kind.

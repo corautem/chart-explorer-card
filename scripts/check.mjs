@@ -784,6 +784,8 @@ try {
     await page.mouse.move(0, 0);
     await page.locator(`${ed} [data-field="tooltip"]`).click();
     await page.waitForTimeout(300);
+    // Folded again, so the card stays on screen (it draws only there) while the axis settings are clicked.
+    await group('chart');
     await group('space');
     check('chart height sits with the space settings', (await page.locator(`${ed} .group[data-group="space"] [data-field="height"]`).count()) === 1);
     await change(`${ed} [data-field="x_padding_right"]`, 10);
@@ -815,6 +817,32 @@ try {
     check('the left unit is centred over its numbers', leftUnit && Math.abs(leftUnit.centre - (4 + leftUnit.plotLeft - 8) / 2) < 2,
       leftUnit ? `centre ${leftUnit.centre.toFixed(1)}, column ${(4).toFixed(0)}-${(leftUnit.plotLeft - 8).toFixed(0)}` : 'none');
     await page.screenshot({ path: `${OUT}/editor-visual.png`, fullPage: true });
+
+    // The card's line width, which an entity's own width overrides.
+    await group('chart');
+    await change(`${ed} [data-field="line_width"]`, 4);
+    await page.locator(card()).scrollIntoViewIfNeeded();
+    await page.waitForTimeout(300);
+    const wide = await saved();
+    check('the card line width is saved', wide.line_width === 4, String(wide.line_width));
+    const ownWidth = (index) => (typeof wide.entities[index] === 'string' ? undefined : wide.entities[index].width);
+    const lineWidths = (await option('series'))
+      .filter((s) => s.type === 'line' && /^\d+:[^#]+$/.test(s.id))
+      .map((s) => ({ id: s.id, width: s.lineStyle.width, expected: ownWidth(Number(s.id.split(':')[0])) ?? 4 }));
+    check('lines take the card width unless their entity sets one',
+      lineWidths.length > 1 && lineWidths.some((l) => l.expected !== 4) && lineWidths.every((l) => l.width === l.expected), JSON.stringify(lineWidths));
+    await tab('Entities');
+    const plain = wide.entities.findIndex((e) => typeof e === 'string' || e.width === undefined);
+    await page.locator(`${ed} .row`).nth(plain).locator('button[title="Edit"]').click();
+    const startWidth = await page.locator(`${ed} [data-field="width"]`).first().inputValue();
+    await change(`${ed} [data-field="name"]`, 'Card width');
+    const renamed = (await saved()).entities[plain];
+    check("an entity page starts at the card width and saves no width of its own", startWidth === '4' && renamed.name === 'Card width' && !('width' in renamed),
+      `${startWidth} ${JSON.stringify(renamed)}`);
+    await page.locator(`${ed} .back`).click();
+    await tab('Visual');
+    await change(`${ed} [data-field="line_width"]`, 2);
+    check('a card line width of 2 is not saved', !('line_width' in (await saved())));
 
     await tab('Advanced');
     for (const id of ['performance', 'data', 'csv']) await group(id);

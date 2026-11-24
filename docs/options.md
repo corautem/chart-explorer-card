@@ -12,7 +12,7 @@ Edit the card from the dashboard editor like any built-in card. The editor has f
 |---|---|
 | Entities | A search box at the top adds an entity. Below it, the entities in order, each with its colour: drag the handle to reorder (or focus it and use the arrow keys), the pencil opens the entity's settings in one scroll, and the bin removes. The entity page shows Divide by (with the meters to add and the smallest divisor once it is set) for a ratio, where the line comes from (Draw from: the recorded history, or a list in one of the entity's attributes, with the keys in each item) and how the entity is drawn (Draw as): line shape, type, width and fill for lines; the states that shade a band; a colour picker per state for timelines and bands (states from the last 30 days, and any you add); then name, colour, show in the values row, show the name, show unit, unit, decimal places, scale and the value drawn on long windows. |
 | General | Title, chart type, starting window and what dragging the chart does, then folding groups: Bars (length of each bar, stacking; shown for bar charts), Quick ranges (the seven standard lengths at the top of the Presets menu; tap to show or hide), Menu entries (the nine presets, the same way) and Toolbar (position top, bottom or off, and a switch for each control). Quick ranges add lengths with "Past [number] [unit] Add length"; menu entries choose Past or Next, so a length can run into the future ("Next day"). Added lengths follow the standard ones in an amber shade, switch on and off, and × deletes them. |
-| Visual | Folding groups: values (above or below the chart, row alignment, value position, name alignment, entity colour, value and name text size, space between values, show names), chart (faded line opacity, the now line, floating tooltip, rescaling), height and space inside the chart, timeline strips (strip height, names above the strips, states written inside), x-axis (time labels, their size, vertical grid lines) and y-axis (value labels, their size, units above the axes, starting at zero, horizontal grid lines). |
+| Visual | Folding groups: values (above or below the chart, row alignment, value position, name alignment, entity colour, value and name text size, space between values, show names), chart (line width, faded line opacity, the now line, floating tooltip, rescaling), height and space inside the chart, timeline strips (strip height, names above the strips, states written inside), x-axis (time labels, their size, vertical grid lines) and y-axis (value labels, their size, units above the axes, starting at zero, horizontal grid lines). |
 | Advanced | Lightweight mode and animations, data sources, the value drawn on long windows for every entity, CSV export. Each setting has an explanation under it. |
 
 The editor saves only what differs from the defaults, so the YAML stays short, and it keeps any option it does not show.
@@ -55,6 +55,7 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | `x_padding_left` | `0` | Space before the start of the window: a percentage of the window (`5`) or a length (`30m`). |
 | `x_padding_right` | `0` | Space after the end of the window, the same way. On rolling windows it brings the now line into view. The older name `now_offset` still works. |
 | `height` | `250` | Chart height in pixels. Timeline strips add their own height under it. |
+| `line_width` | `2` | Width of every line, in pixels. An entity's own `width` replaces it for that entity. |
 | `faded_opacity` | `0.1` | Opacity of a faded line, from 0 to 1. |
 | `fade_rescale` | `false` | `true` rescales the y-axis to the lines that are not faded. |
 | `tooltip` | `false` | `true` adds a floating box beside the cursor line with the value of each line drawn at that moment. Entities shown only in the values row, and lines with nothing at that moment (a forecast for another day, a measurement after now), are left out. The values row then keeps showing the current values instead of following the cursor. |
@@ -99,7 +100,7 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | `line_style` | automatic | `solid`, `dashed`, `dotted` or `none` (no line, only its fill or shaded range). Automatic is solid, and dashed from the ninth entity on. |
 | `fill` | `false` | Fill under the line, fading downwards unless `fill_opacity` is set. |
 | `fill_opacity` | fading | 0 to 1: an even fill at this opacity, such as `0.35`, instead of a fill that fades downwards. |
-| `width` | `2` | Line width in pixels. |
+| `width` | the card's `line_width` | Line width in pixels, for this entity only. |
 | `y_axis` | by unit | `left`, `right`, or any other name for a separate unlabelled scale. By default the first unit uses the left axis, the second the right, and further units get their own scale. Units of one family, such as W and kW, share a scale in the first one's unit; the others are converted for drawing. |
 | `decimals` | the entity's display precision; 2 for a ratio | Decimal places for the value. |
 | `show_in_header` | `true` | `false` hides the entity from the values row; its line stays. |

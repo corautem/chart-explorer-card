@@ -172,6 +172,12 @@ export class ChartExplorerCardEditor extends LitElement {
     return this._config?.entities ?? [];
   }
 
+  /** The card's line width, which an entity without its own starts from; 2 when unset or not above 0. */
+  private get _lineWidth(): number {
+    const width = Number(this._config?.line_width);
+    return width > 0 ? width : 2;
+  }
+
   private get _dark(): boolean {
     return Boolean(this.hass?.themes?.darkMode);
   }
@@ -444,7 +450,7 @@ export class ChartExplorerCardEditor extends LitElement {
   private _onEntity(event: CustomEvent<{ value: FormData }>, index: number): void {
     event.stopPropagation();
     const entities = [...this._entities];
-    entities[index] = entityFromForm(event.detail.value, entities[index], seriesColor(index, this._dark).color);
+    entities[index] = entityFromForm(event.detail.value, entities[index], seriesColor(index, this._dark).color, this._lineWidth);
     this._commit(entities);
   }
 
@@ -593,7 +599,7 @@ export class ChartExplorerCardEditor extends LitElement {
   private _entityForm(schema: unknown[], item: EntityItem, index: number, defaultColor: string) {
     return html`<ha-form
       .hass=${this.hass}
-      .data=${entityToForm(item, defaultColor)}
+      .data=${entityToForm(item, defaultColor, this._lineWidth)}
       .schema=${schema}
       .computeLabel=${this._label}
       .computeHelper=${this._entityHelper}

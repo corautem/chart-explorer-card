@@ -118,6 +118,7 @@ export interface CardConfigInput {
   quick_ranges?: string[];
   presets?: string[];
   height?: number;
+  line_width?: number;
   faded_opacity?: number;
   fade_rescale?: boolean;
   tooltip?: boolean;
@@ -322,9 +323,10 @@ export function normalizeConfig(input: unknown): CardConfig {
     yAxes[axis.id] = min !== undefined && max !== undefined && max <= min ? {} : { min, max };
   }
 
+  const lineWidth = positiveNumber(c.line_width, 'line_width', 2);
   return {
     title: c.title === undefined || c.title === null ? undefined : String(c.title),
-    entities: c.entities.flatMap(normalizeEntity),
+    entities: c.entities.flatMap((e, index) => normalizeEntity(e, index, lineWidth)),
     chartType: oneOf(c.chart_type, 'chart_type', CHART_TYPES, 'line'),
     stacked: bool(c.stacked, 'stacked', false),
     period: oneOf(c.period, 'period', ['auto', 'hour', 'day', 'week', 'month'], 'auto'),
@@ -403,9 +405,9 @@ export function normalizeConfig(input: unknown): CardConfig {
  * One row per line. An entity drawing several values from an attribute
  * becomes one row per value, so each fades, shows its value and exports on its own.
  */
-function normalizeEntity(raw: string | EntityConfigInput, index: number): EntityConfig[] {
+function normalizeEntity(raw: string | EntityConfigInput, index: number, lineWidth: number): EntityConfig[] {
   const e: EntityConfigInput = typeof raw === 'string' ? { entity: raw } : raw;
-  const row = normalizeRow(e, index);
+  const row = normalizeRow(e, index, lineWidth);
   const source = attributeSource(e?.attribute, `Entity ${index + 1} attribute`);
   if (!source) return [row];
   const plain = { name: source.name, time: source.time };
@@ -451,7 +453,7 @@ export function legacyValues(source: { value?: string; low?: string; high?: stri
   return values;
 }
 
-function normalizeRow(e: EntityConfigInput, index: number): EntityConfig {
+function normalizeRow(e: EntityConfigInput, index: number, lineWidth: number): EntityConfig {
   const where = `Entity ${index + 1}`;
   const ratio = ratioSource(e, where);
   if (!e || typeof e.entity !== 'string' || !ENTITY_ID.test(e.entity)) {
@@ -473,7 +475,7 @@ function normalizeRow(e: EntityConfigInput, index: number): EntityConfig {
     lineStyle: e.line_style === undefined ? undefined : oneOf(e.line_style, `${where} line_style`, LINE_STYLES, 'solid'),
     fill: bool(e.fill, `${where} fill`, false),
     fillOpacity: fillOpacity(e.fill_opacity, `${where} fill_opacity`),
-    width: positiveNumber(e.width, `${where} width`, 2),
+    width: positiveNumber(e.width, `${where} width`, lineWidth),
     yAxis: e.y_axis === undefined ? undefined : String(e.y_axis),
     decimals: decimals === undefined ? undefined : clamp(Math.round(decimals), 0, 10),
     showInHeader: bool(e.show_in_header, `${where} show_in_header`, true),

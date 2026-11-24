@@ -41,7 +41,7 @@ Spans work in `default_range`, `quick_ranges` and `presets`; in the editor, type
 
 ## Values above the chart
 
-Each entity shows its value beside a bar in its line's colour, with its name underneath (or above, left or right of it, with `value_position`). An entity with states shows the state as Home Assistant writes it, such as "Standby", in that state's colour.
+Each entity shows its value in its line's colour, made darker or lighter where the plain colour would be hard to read, with its name underneath (or above, left or right of it, with `value_position`). An entity with states shows the state as Home Assistant writes it, such as "Standby", in that state's colour.
 
 - Tap a value to open the entity's details (more-info).
 - Tap a name to fade the line, bars or strip (drawn at `faded_opacity`, 10 % by default) and strike the name through. Tap again to bring it back. Faded entities are left out of the CSV, and out of a pie.

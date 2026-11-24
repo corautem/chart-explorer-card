@@ -13,7 +13,7 @@ A Home Assistant dashboard card for exploring history: lines, stacked areas, bar
 - **Forecasts and other lists:** the values in a list kept in an attribute, such as a solar forecast or electricity prices, are drawn into the future, each with its own colour, line and fill, and with shaded ranges between them.
 - **Time controls in one row:** previous and next, Now, and a Presets menu with quick ranges from 1 hour to 1 year, presets such as Today or Last month, spans across the past and the future (12 hours back to 48 ahead, or today and the next two days), and a custom range.
 - **Drag to move, pinch to zoom:** the card loads finer data as you zoom in; a double-tap goes back.
-- **Values that follow the cursor:** each entity's value sits above the chart, marked with a bar in its colour; tap a name to fade that entity.
+- **Values that follow the cursor:** each entity's value sits above the chart in its colour; tap a name to fade that entity.
 - **Export:** a CSV of exactly what is shown, or a PNG with the title and legend.
 - **Visual editor** for every setting, and **light by default:** only the chart parts in use are bundled, animations are off, and nothing redraws while the card is off-screen.
 

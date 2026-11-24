@@ -6,7 +6,7 @@ import { isOnState, stateColor } from '../src/chart/states';
 import { mainState, periodStates, stateDurations, timelineSegments } from '../src/chart/timeline';
 import { placeBars, timelineHeight } from '../src/chart/timeseries';
 import { heatColor } from '../src/chart/heatmap';
-import { seriesColor } from '../src/chart/theme';
+import { readableColor, seriesColor } from '../src/chart/theme';
 import {
   accumulators,
   addRaw,
@@ -343,5 +343,19 @@ describe('chart settings', () => {
     expect(() => normalizeConfig({ entities: ['sensor.a'], chart_type: 'radar' as never })).toThrow(/chart_type/);
     expect(() => normalizeConfig({ entities: [{ entity: 'sensor.a', type: 'dots' as never }] })).toThrow(/type/);
     expect(() => normalizeConfig({ entities: [{ entity: 'sensor.a', state_colors: ['red'] as never }] })).toThrow(/state_colors/);
+  });
+});
+
+describe('readable colours', () => {
+  it('moves a colour towards the text colour only as far as 4.5:1 needs', () => {
+    expect(readableColor('#eda100', '#212121', '#ffffff')).toBe('rgb(155, 110, 13)');
+    expect(readableColor('#2a78d6', '#212121', '#ffffff')).toBe('rgb(42, 118, 210)');
+    expect(readableColor('#d95926', '#e1e1e1', '#1c1c1c')).toBe('rgb(217, 93, 44)');
+  });
+
+  it('keeps a colour that already reads, or one it cannot read', () => {
+    expect(readableColor('#6250d6', '#212121', '#ffffff')).toBe('#6250d6');
+    expect(readableColor('#3987e5', '#e1e1e1', '#1c1c1c')).toBe('#3987e5');
+    expect(readableColor('not a colour', '#212121', '#ffffff')).toBe('not a colour');
   });
 });

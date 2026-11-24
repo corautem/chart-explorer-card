@@ -57,6 +57,33 @@ export function toRgb(color: string): [number, number, number] | undefined {
   return [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
 }
 
+function luminance([r, g, b]: [number, number, number]): number {
+  const lin = (c: number) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+}
+
+/**
+ * The colour, mixed with the text colour in 1 % steps only as far as needed to read at 4.5:1
+ * on the background: text needs that (WCAG 1.4.3), and the series colours are chosen for lines.
+ */
+export function readableColor(color: string, text: string, background: string): string {
+  const own = toRgb(color);
+  const ink = toRgb(text);
+  const back = toRgb(background);
+  if (!own || !ink || !back) return color;
+  const bg = luminance(back);
+  const reads = (rgb: [number, number, number]) => {
+    const l = luminance(rgb);
+    return (Math.max(l, bg) + 0.05) / (Math.min(l, bg) + 0.05) >= 4.5;
+  };
+  if (reads(own)) return color;
+  for (let p = 99; p >= 0; p--) {
+    const mix = own.map((c, i) => Math.round((c * p + ink[i] * (100 - p)) / 100)) as [number, number, number];
+    if (reads(mix)) return `rgb(${mix.join(', ')})`;
+  }
+  return color;
+}
+
 /** Any CSS colour with transparency added, for fills. */
 export function withAlpha(color: string, alpha: number): string {
   const rgb = toRgb(color);

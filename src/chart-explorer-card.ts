@@ -45,7 +45,7 @@ import { buildPieOption, pieCentre, type PlotPie } from './chart/pie';
 import { buildHeatmapOption, heatColor, valueRange, type HeatCell } from './chart/heatmap';
 import { isMissingState, isOnState, isQuietState, stateColor } from './chart/states';
 import { mainState, periodStates, stateDurations, timelineSegments, type PeriodStates } from './chart/timeline';
-import { readTheme, seriesColor, shadeColor, withAlpha, type Theme } from './chart/theme';
+import { readableColor, readTheme, seriesColor, shadeColor, withAlpha, type Theme } from './chart/theme';
 import { InteractionController, type InteractionHost } from './chart/interaction';
 import { isStateKind, kindSettled, rowKind, type RowKind } from './rows';
 import { buildCsv, buildPieCsv, type CsvColumn, type CsvSlice } from './export/csv';
@@ -2275,8 +2275,10 @@ export class ChartExplorerCard extends LitElement {
     // Without its name, the value's hover text says whose value it is; the screen-reader label always does.
     const named = row.showName && this._config?.showNames !== false;
     const title = reading.title ?? t('more_info');
+    const theme = (this._theme ??= readTheme(this, this._dark));
+    const valueColor = readableColor(view.color, theme.text, theme.background);
     return html`
-      <div class="item ${faded ? 'faded' : ''}" style=${`--item-color:${view.color}`}>
+      <div class="item ${faded ? 'faded' : ''}" style=${`--item-color:${view.color};--value-color:${valueColor}`}>
         <button
           class="value ${reading.numeric ? '' : 'text'}"
           style=${reading.color ? `color:${reading.color}` : nothing}

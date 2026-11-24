@@ -1065,6 +1065,8 @@ try {
             ],
           },
         },
+        // A list has a value at the cursor even when it is not drawn, so only show_in_chart keeps this row out of the tooltip.
+        { entity: 'sensor.demo_pv_forecast', name: 'Forecast in the values row', show_in_chart: false, attribute: { name: 'detailedForecast', values: [{ key: 'pv_estimate' }] } },
       ],
     });
     const day0 = new Date();
@@ -1085,7 +1087,7 @@ try {
     await page.waitForTimeout(1500);
     await hoverAt(tomorrowNoon);
     const tomorrowRows = await tooltipRows();
-    check('the tooltip tomorrow lists the forecast and leaves out the measurement', tomorrowRows.join('|') === 'Forecast|Forecast 90%', tomorrowRows.join(' | '));
+    check('the tooltip tomorrow lists the forecast, without the measurement or the list shown only in the values row', tomorrowRows.join('|') === 'Forecast|Forecast 90%', tomorrowRows.join(' | '));
     await hoverAt(dayAfterNoon);
     const laterRows = await tooltipRows();
     check('the tooltip after the list ends has no rows', laterRows.length === 0, laterRows.join(' | '));

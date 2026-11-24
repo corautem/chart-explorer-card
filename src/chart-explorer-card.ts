@@ -1891,10 +1891,14 @@ export class ChartExplorerCard extends LitElement {
     if (!this._canDraw()) return;
     const hiddenFor = this._hiddenSince === undefined ? 0 : Date.now() - this._hiddenSince;
     this._hiddenSince = undefined;
+    const now = Date.now();
+    const spec = this._spec;
+    // Decide on the window the tick moves to, and reload before the tick, whose period refresh the reload would drop.
+    const w = spec && slides(spec) ? resolveWindow(spec, now, this._weekStart) : this._window;
+    const reload = hiddenFor > 5 * MINUTE && w !== undefined && containsNow(w, now - MINUTE);
+    if (reload) this._scheduleLoad(0, true);
     this._tick();
-    const w = this._window;
-    if (hiddenFor > 5 * MINUTE && w && containsNow(w, Date.now() - MINUTE)) this._scheduleLoad(0, true);
-    else if (this._dirty) this._requestDraw(true);
+    if (!reload && this._dirty) this._requestDraw(true);
   }
 
   private _startMinuteTimer(): void {

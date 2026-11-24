@@ -431,6 +431,37 @@ try {
     }, card());
     check('no period refresh while the card is out of view', away === 0, `${away} calls`);
     check('the period refresh runs when the card is back in view', back > 0, `${back} calls`);
+    // Back after more than 5 minutes: one reload, without a period refresh that the reload would drop.
+    const requests = await page.evaluate(async (sel) => {
+      const el = document.querySelector(sel);
+      el._data.loadedAt -= 10 * 60e3;
+      el._setOnScreen(false);
+      el._hiddenSince -= 6 * 60e3;
+      const fetch = el._fetch;
+      let n = 0;
+      el._fetch = (...args) => (n++, fetch.apply(el, args));
+      el._setOnScreen(true);
+      await new Promise((r) => setTimeout(r, 500));
+      return n;
+    }, card());
+    check('a card back after more than 5 minutes out of view loads once', requests === 1, `${requests} requests`);
+    await context.close();
+  }
+  {
+    // The same return after the minute timer stopped, as in a suspended page: the reload still runs, for the window as it is now.
+    const { page, context } = await open('?only=1&live=0&delay=50');
+    await instrument(page);
+    const reloaded = await page.evaluate(async (sel) => {
+      const el = document.querySelector(sel);
+      el._window = { start: el._window.start - 2 * 3600e3, end: el._window.end - 2 * 3600e3 };
+      el._setOnScreen(false);
+      el._hiddenSince -= 6 * 60e3;
+      const a = window.__calls;
+      el._setOnScreen(true);
+      await new Promise((r) => setTimeout(r, 500));
+      return window.__calls > a && el._covers(el._data, el._window, Date.now()) && Date.now() - el._window.end < 60e3;
+    }, card());
+    check('a card back after its minute timer stopped reloads the current window', reloaded);
     await context.close();
   }
   {

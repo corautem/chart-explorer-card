@@ -211,9 +211,12 @@ export const cardStyles = css`
     justify-content: flex-end;
     gap: 6px;
   }
+  /* The error colour as a bar, so the 12 px text can be in the text colour: Home Assistant's red is under 4.5:1 on white. */
   .popover .error,
   .notice {
-    color: var(--error-color, #db4437);
+    color: var(--primary-text-color);
+    border-left: 3px solid var(--error-color, #db4437);
+    padding-left: 6px;
     font-size: 12px;
     margin-bottom: 6px;
   }

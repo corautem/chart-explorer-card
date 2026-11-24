@@ -40,4 +40,4 @@ Files are named after the card title (or `chart`) with the start and end date, f
 
 In the Home Assistant Companion app, where ordinary downloads may not work, the card offers the phone's share sheet instead.
 
-If the file cannot be made, a line under the title says why until you next open a menu.
+If the file cannot be made, a line at the top of the card says why until you next open a menu.

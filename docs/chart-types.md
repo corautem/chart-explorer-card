@@ -183,7 +183,7 @@ Items can also be `[time, value]` pairs, and the attribute can be a map of times
 
 - **Unit:** a list has no unit of its own. When the entity's unit is kWh (or Wh, MWh), the list is shown in kW (W, MW), because forecast slots hold power; otherwise set `unit` on the entity.
 - **Scales:** values in W and kW (or Wh and kWh) share one scale, in the unit of the first entity that has one; the others are converted for drawing, and their values above the chart keep their own unit. A solar power sensor in W and a forecast in kW draw on one scale.
-- **Values row:** each value shows its reading now, and at the cursor, before or after the present. `show_in_header: false` keeps a value off the row, such as one used only for shading.
+- **Values row:** each value shows its reading now, and at the cursor, before or after the present. Before the list's first item, and once its last period is over, a value shows `-`. The last period counts as long as the one before it, so an hourly price list keeps its 23:00 price until midnight. `show_in_header: false` keeps a value off the row, such as one used only for shading.
 - **Updates:** the chart redraws when the attribute changes. No history is requested for these values.
 - Lists are drawn in line, area and bar charts; pies and heatmaps leave them out.
 

@@ -39,7 +39,7 @@ export default defineConfig(({ command, mode }) => {
       sourcemap: false,
       reportCompressedSize: false,
       // ECharts' smallest useful build is about 457 KB, so the default 500 KB warning would always fire.
-      chunkSizeWarningLimit: 650,
+      chunkSizeWarningLimit: 700,
       rolldownOptions: {
         input: editor ? 'src/editor/editor.ts' : 'src/chart-explorer-card.ts',
         output: {

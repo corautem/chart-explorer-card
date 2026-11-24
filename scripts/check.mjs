@@ -489,6 +489,17 @@ try {
     await page.waitForTimeout(500);
     const b = await page.evaluate(() => window.__calls);
     check('a card put back with data that fits loads nothing', b === a, `${b - a} calls`);
+    // The same when leaving the page cuts off the load a drag started.
+    await page.evaluate(() => (window.__mode = 'slow'));
+    await drag(page);
+    const inFlight = await page.evaluate((sel) => document.querySelector(sel)._extLoad !== undefined, card());
+    await page.evaluate(putBack, card());
+    await page.waitForFunction((sel) => !document.querySelector(sel)._loading && !document.querySelector(sel)._extLoad, card(), { timeout: 15000 });
+    const fitsDrag = await page.evaluate((sel) => {
+      const el = document.querySelector(sel);
+      return Boolean(el._data) && el._covers(el._data, el._window, Date.now());
+    }, card());
+    check('a card put back while a drag loaded loads the dragged window', inFlight && fitsDrag, `load in flight ${inFlight}`);
     await context.close();
   }
   {

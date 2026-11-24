@@ -2261,7 +2261,7 @@ export class ChartExplorerCard extends LitElement {
     const rows = config.entities.filter((row) => row.showInHeader);
     if (!rows.length) return nothing;
     return html`<div
-      class="values pos-${config.valuePosition} align-${config.valuesAlign} name-${config.nameAlign} ${config.valuesPlacement}"
+      class="values pos-${config.valuePosition} color-${config.valuesColor} align-${config.valuesAlign} name-${config.nameAlign} ${config.valuesPlacement}"
       style=${`--value-size:${config.valueSize}px;--name-size:${config.nameSize}px;--values-gap:${config.valuesGap}px`}
     >
       ${rows.map((row) => this._renderValue(row))}

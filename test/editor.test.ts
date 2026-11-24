@@ -33,6 +33,12 @@ describe('editor form data', () => {
     expect(out.faded_opacity).toBe(0.25);
   });
 
+  it('keeps the entity colour choice and leaves its default out', () => {
+    expect(toForm(base).values_color).toBe('value');
+    expect(fromForm({ ...toForm(base), values_color: 'bar_bottom' }, base, ['sensor.a']).values_color).toBe('bar_bottom');
+    expect(fromForm({ ...toForm(base), values_color: 'value' }, base, ['sensor.a'])).toEqual(base);
+  });
+
   it('keeps options the editor does not show', () => {
     const original = { ...base, some_future_option: 'x' } as CardConfigInput;
     expect(fromForm(toForm(original), original, ['sensor.a'])).toMatchObject({ some_future_option: 'x' });

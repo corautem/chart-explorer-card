@@ -326,7 +326,7 @@ export const cardStyles = css`
     text-align: left;
   }
   .item .value {
-    color: var(--value-color, var(--item-color));
+    color: var(--primary-text-color);
     font-size: var(--value-size, 22px);
     font-weight: 500;
     line-height: 1.2;
@@ -338,6 +338,32 @@ export const cardStyles = css`
   }
   .item .value.text {
     font-size: calc(var(--value-size, 22px) * 0.72);
+  }
+  /* The name is the last child, or the value when names are hidden, so a hidden name still leaves the colour somewhere. */
+  :is(.color-value, .color-both) .item .value,
+  :is(.color-name, .color-both) .item > :last-child {
+    color: var(--value-color, var(--item-color));
+  }
+  :is(.color-dot, .color-line) .item > :last-child::before {
+    content: '';
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 5px;
+    border-radius: 50%;
+    background: var(--item-color);
+    vertical-align: -1px;
+  }
+  .color-line .item > :last-child::before {
+    width: 16px;
+    height: 3px;
+    margin-right: 6px;
+    border-radius: 0;
+    vertical-align: middle;
+  }
+  .color-bar_bottom .item {
+    border-bottom: 3px solid var(--item-color);
+    padding-bottom: 2px;
   }
   /* Where the value sits relative to the name. */
   .pos-below .item {

@@ -43,6 +43,7 @@ The editor saves only what differs from the defaults, so the YAML stays short, a
 | `drag_action` | `pan` | What dragging across the chart does: `pan` moves the time window, `zoom` selects a part to zoom into. |
 | `values_placement` | `above` | The values row `above` or `below` the chart. |
 | `value_position` | `above` | Where each value sits relative to its name: `above`, `below`, `left` or `right`. |
+| `values_color` | `value` | Where each entity's colour shows in the values row: `value`, `name`, `both`, `dot` or `line` before the name, or `bar_bottom`, a bar under each value and its name. Text in the colour is made darker or lighter where the plain colour would be hard to read. |
 | `name_align` | `left` | How each name lines up with its value when one sits above the other: `left`, `center` or `right`. |
 | `value_size` | `22` | Value text size in pixels; the unit is drawn at 60 % of it. |
 | `name_size` | `12` | Name text size in pixels. |

@@ -9,6 +9,7 @@ export type StatisticKind = 'mean' | 'min' | 'max' | 'state';
 export type LineStyle = 'solid' | 'dashed' | 'dotted' | 'none';
 /** Where each value sits relative to its entity name. */
 export type ValuePosition = 'above' | 'below' | 'left' | 'right';
+export type ValuesColor = 'value' | 'name' | 'both' | 'dot' | 'line' | 'bar_bottom';
 /** How the values row spreads across the card. */
 export type ValuesAlign = 'left' | 'center' | 'right' | 'spread' | 'even';
 /** What dragging across the chart does. */
@@ -146,6 +147,7 @@ export interface CardConfigInput {
   values_placement?: 'above' | 'below';
   name_align?: 'left' | 'center' | 'right';
   value_position?: ValuePosition;
+  values_color?: ValuesColor;
   value_size?: number;
   name_size?: number;
   x_axis_show?: boolean;
@@ -272,6 +274,7 @@ export interface CardConfig {
   /** How each name lines up with its value when one sits above the other. */
   nameAlign: 'left' | 'center' | 'right';
   valuePosition: ValuePosition;
+  valuesColor: ValuesColor;
   valueSize: number;
   nameSize: number;
   xAxis: { show: boolean; labelSize: number; grid: GridStyle };
@@ -364,6 +367,7 @@ export function normalizeConfig(input: unknown): CardConfig {
     valuesPlacement: oneOf(c.values_placement, 'values_placement', ['above', 'below'], 'above'),
     nameAlign: oneOf(c.name_align, 'name_align', ['left', 'center', 'right'], 'left'),
     valuePosition: oneOf(c.value_position, 'value_position', ['above', 'below', 'left', 'right'], 'above'),
+    valuesColor: oneOf(c.values_color, 'values_color', ['value', 'name', 'both', 'dot', 'line', 'bar_bottom'], 'value'),
     valueSize: clamp(positiveNumber(c.value_size, 'value_size', 22), 10, 64),
     nameSize: clamp(positiveNumber(c.name_size, 'name_size', 12), 8, 40),
     xAxis: {

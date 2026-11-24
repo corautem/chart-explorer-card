@@ -17,6 +17,7 @@ describe('configuration', () => {
     expect(c.valuesPlacement).toBe('above');
     expect(c.nameAlign).toBe('left');
     expect(c.valuePosition).toBe('above');
+    expect(c.valuesColor).toBe('value');
     expect(c.valueSize).toBe(22);
     expect(c.nameSize).toBe(12);
     expect(c.yPadding).toEqual({ top: 0.05, bottom: 0.05 });
@@ -118,6 +119,8 @@ describe('configuration', () => {
     expect(() => normalizeConfig({ entities: ['sensor.a'], csv_separator: ';;' })).toThrow(/csv_separator/);
     expect(() => normalizeConfig({ entities: ['sensor.a'], toolbar_position: 'left' as never })).toThrow(/toolbar_position/);
     expect(() => normalizeConfig({ entities: ['sensor.a'], value_position: 'middle' as never })).toThrow(/value_position/);
+    expect(normalizeConfig({ entities: ['sensor.a'], values_color: 'bar_bottom' }).valuesColor).toBe('bar_bottom');
+    expect(() => normalizeConfig({ entities: ['sensor.a'], values_color: 'bar_left' as never })).toThrow(/values_color/);
   });
 
   it('reads "tab" as a tab separator and clamps the faded opacity', () => {

@@ -211,12 +211,10 @@ export const cardStyles = css`
     justify-content: flex-end;
     gap: 6px;
   }
-  /* The error colour as a bar, so the 12 px text can be in the text colour: Home Assistant's red is under 4.5:1 on white. */
+  /* Home Assistant's red reads at 4.29:1 on white and 3.97:1 on #1c1c1c; 15 % of the text colour lifts it to 5.28:1 and 4.62:1. Without color-mix() the text colour is inherited. */
   .popover .error,
   .notice {
-    color: var(--primary-text-color);
-    border-left: 3px solid var(--error-color, #db4437);
-    padding-left: 6px;
+    color: color-mix(in srgb, var(--error-color, #db4437) 85%, var(--primary-text-color));
     font-size: 12px;
     margin-bottom: 6px;
   }
